@@ -1,0 +1,42 @@
+{
+  "name": "api-quick",
+  "version": "0.1.0",
+  "description": "High-Performance Multi-Interface HTTP Engine, Automation & API Workbench",
+  "main": "dist/index.js",
+  "bin": {
+    "api-quick": "bin/api-quick.js"
+  },
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts",
+    "test": "node --test",
+    "lint": "tsc --noEmit"
+  },
+  "keywords": [
+    "http",
+    "api",
+    "cli",
+    "workbench",
+    "rest",
+    "graphql",
+    "openapi",
+    "postman",
+    "httpie",
+    "curl"
+  ],
+  "author": "SKJUV",
+  "license": "MIT",
+  "dependencies": {
+    "hono": "^4.7.0",
+    "undici": "^7.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
