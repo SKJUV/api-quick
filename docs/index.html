@@ -3,18 +3,19 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>api-quick — Official Documentation & Architecture Guide</title>
+  <title>api-quick — Modern API Workbench & Automation Platform</title>
+  <meta name="description" content="High-performance HTTP engine, polyglot AST route sniffer, E2E workflow runner, and developer API workbench." />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
-    :root {
+    :root[data-theme="dark"] {
       --bg: #090d16;
-      --panel: #131b2e;
-      --card-bg: #182238;
-      --border: #23314d;
-      --border-hover: #33466d;
-      --text: #f1f5f9;
+      --panel: #0f172a;
+      --card-bg: #1e293b;
+      --border: #334155;
+      --border-hover: #475569;
+      --text: #f8fafc;
       --text-muted: #94a3b8;
       --primary: #0284c7;
       --primary-hover: #0369a1;
@@ -23,10 +24,29 @@
       --yellow: #f59e0b;
       --red: #ef4444;
       --purple: #8b5cf6;
+      --code-bg: #020617;
+      --sidebar-width: 280px;
+    }
+    :root[data-theme="light"] {
+      --bg: #f8fafc;
+      --panel: #ffffff;
+      --card-bg: #f1f5f9;
+      --border: #cbd5e1;
+      --border-hover: #94a3b8;
+      --text: #0f172a;
+      --text-muted: #64748b;
+      --primary: #0284c7;
+      --primary-hover: #0369a1;
+      --accent: #0284c7;
+      --green: #059669;
+      --yellow: #d97706;
+      --red: #dc2626;
+      --purple: #7c3aed;
+      --code-bg: #f1f5f9;
       --sidebar-width: 280px;
     }
     
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+    * { box-sizing: border-box; margin: 0; padding: 0; transition: background-color 0.2s, border-color 0.2s; }
     body {
       background-color: var(--bg);
       color: var(--text);
@@ -39,13 +59,13 @@
     header {
       position: fixed;
       top: 0; left: 0; right: 0;
-      height: 60px;
+      height: 64px;
       background: var(--panel);
       border-bottom: 1px solid var(--border);
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 0 24px;
+      padding: 0 28px;
       z-index: 100;
     }
     .logo {
@@ -56,6 +76,7 @@
       align-items: center;
       gap: 10px;
       text-decoration: none;
+      letter-spacing: -0.3px;
     }
     .badge {
       background: rgba(56, 189, 248, 0.1);
@@ -66,66 +87,82 @@
       font-size: 0.75rem;
       font-weight: 600;
     }
-    .nav-links {
+    .header-right {
       display: flex;
       align-items: center;
-      gap: 16px;
+      gap: 14px;
     }
-    .nav-link {
-      color: var(--text-muted);
-      text-decoration: none;
-      font-size: 0.85rem;
-      font-weight: 500;
-      transition: color 0.15s;
+    .search-box {
+      position: relative;
+      width: 240px;
     }
-    .nav-link:hover { color: var(--text); }
-    .btn-github {
+    .search-box input {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 12px 6px 32px;
+      color: var(--text);
+      font-size: 0.82rem;
+      outline: none;
+    }
+    .search-box input:focus { border-color: var(--accent); }
+    .search-box svg {
+      position: absolute;
+      left: 10px; top: 50%;
+      transform: translateY(-50%);
+      width: 14px; height: 14px;
+      stroke: var(--text-muted);
+    }
+    .btn-secondary {
       background: var(--card-bg);
       border: 1px solid var(--border);
       color: var(--text);
-      padding: 6px 14px;
+      padding: 6px 12px;
       border-radius: 6px;
       text-decoration: none;
       font-size: 0.82rem;
-      font-weight: 600;
+      font-weight: 500;
+      cursor: pointer;
       display: flex;
       align-items: center;
       gap: 6px;
     }
-    .btn-github:hover { border-color: var(--accent); }
+    .btn-secondary:hover { border-color: var(--border-hover); }
 
     .doc-layout {
-      margin-top: 60px;
+      margin-top: 64px;
       display: flex;
       width: 100vw;
-      height: calc(100vh - 60px);
+      height: calc(100vh - 64px);
     }
 
     aside {
       width: var(--sidebar-width);
       background: var(--panel);
       border-right: 1px solid var(--border);
-      padding: 20px 16px;
+      padding: 24px 18px;
       overflow-y: auto;
       display: flex;
       flex-direction: column;
-      gap: 20px;
+      gap: 24px;
     }
     .menu-group-title {
       font-size: 0.75rem;
       font-weight: 700;
-      color: var(--accent);
+      color: var(--text-muted);
       text-transform: uppercase;
       letter-spacing: 0.6px;
       margin-bottom: 8px;
+      padding-left: 8px;
     }
     .menu-item {
       display: block;
       color: var(--text-muted);
       text-decoration: none;
-      font-size: 0.85rem;
-      padding: 6px 10px;
-      border-radius: 4px;
+      font-size: 0.88rem;
+      padding: 7px 12px;
+      border-radius: 6px;
       transition: all 0.15s;
     }
     .menu-item:hover, .menu-item.active {
@@ -136,57 +173,78 @@
 
     main {
       flex: 1;
-      padding: 40px 60px;
+      padding: 48px 80px;
       overflow-y: auto;
       max-width: 1100px;
     }
 
-    h1 { font-size: 2.2rem; font-weight: 800; margin-bottom: 12px; letter-spacing: -0.5px; }
-    h2 { font-size: 1.5rem; font-weight: 700; margin-top: 36px; margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
-    h3 { font-size: 1.15rem; font-weight: 600; margin-top: 24px; margin-bottom: 10px; color: var(--accent); }
-    p { font-size: 0.95rem; line-height: 1.65; color: var(--text-muted); margin-bottom: 16px; }
+    h1 { font-size: 2.4rem; font-weight: 800; margin-bottom: 12px; letter-spacing: -0.6px; line-height: 1.2; }
+    h2 { font-size: 1.45rem; font-weight: 700; margin-top: 40px; margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+    h3 { font-size: 1.1rem; font-weight: 600; margin-top: 24px; margin-bottom: 10px; color: var(--accent); }
+    p { font-size: 0.95rem; line-height: 1.7; color: var(--text-muted); margin-bottom: 16px; }
 
-    pre {
-      background: var(--card-bg);
+    .hero-banner {
+      background: linear-gradient(135deg, rgba(56, 189, 248, 0.08) 0%, rgba(139, 92, 246, 0.08) 100%);
       border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 16px;
+      border-radius: 8px;
+      padding: 32px;
+      margin-bottom: 32px;
+    }
+    .hero-title { font-size: 1.6rem; font-weight: 700; margin-bottom: 8px; color: var(--text); }
+    .hero-sub { font-size: 0.95rem; color: var(--text-muted); line-height: 1.6; }
+
+    .code-block {
+      position: relative;
+      margin-bottom: 24px;
+    }
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 18px 20px;
       font-family: 'JetBrains Mono', monospace;
       font-size: 0.85rem;
       overflow-x: auto;
-      margin-bottom: 20px;
-      line-height: 1.5;
+      line-height: 1.55;
+      color: var(--text);
     }
-    code {
-      font-family: 'JetBrains Mono', monospace;
-      background: rgba(56, 189, 248, 0.1);
-      color: var(--accent);
-      padding: 2px 6px;
+    .copy-btn {
+      position: absolute;
+      top: 10px; right: 10px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      padding: 4px 8px;
       border-radius: 4px;
-      font-size: 0.85rem;
+      font-size: 0.75rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 4px;
     }
-    pre code { background: none; color: inherit; padding: 0; }
+    .copy-btn:hover { color: var(--text); border-color: var(--accent); }
 
     table {
       width: 100%;
       border-collapse: collapse;
-      margin-bottom: 24px;
+      margin-bottom: 28px;
       font-size: 0.88rem;
     }
     th, td {
       border: 1px solid var(--border);
-      padding: 10px 14px;
+      padding: 12px 16px;
       text-align: left;
     }
     th { background: var(--card-bg); color: var(--accent); font-weight: 600; }
 
     .callout {
-      background: rgba(56, 189, 248, 0.08);
+      background: rgba(56, 189, 248, 0.06);
       border-left: 4px solid var(--accent);
-      padding: 14px 18px;
+      padding: 16px 20px;
       border-radius: 4px;
-      margin-bottom: 24px;
+      margin-bottom: 28px;
       font-size: 0.9rem;
+      line-height: 1.6;
     }
 
     svg.icon { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
@@ -198,14 +256,19 @@
     <a href="#" class="logo">
       <svg class="icon" style="width:20px; height:20px; stroke: var(--accent);" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
       api-quick
-      <span class="badge">v1.0.0 Docs</span>
+      <span class="badge">v1.0.0 Online Docs</span>
     </a>
-    <div class="nav-links">
-      <a href="https://www.npmjs.com/package/@skjuve/api-quick" target="_blank" class="nav-link">NPM Registry</a>
-      <a href="https://github.com/SKJUV/api-quick" target="_blank" class="btn-github">
-        <svg class="icon" viewBox="0 0 24 24"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path></svg>
-        GitHub Repository
-      </a>
+    <div class="header-right">
+      <div class="search-box">
+        <svg class="icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+        <input type="text" id="docSearch" placeholder="Search documentation..." />
+      </div>
+      <button id="themeToggle" class="btn-secondary">
+        <svg class="icon" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <span id="themeLabel">Dark</span>
+      </button>
+      <a href="https://www.npmjs.com/package/@skjuve/api-quick" target="_blank" class="btn-secondary">NPM</a>
+      <a href="https://github.com/SKJUV/api-quick" target="_blank" class="btn-secondary" style="color: var(--accent); border-color: rgba(56, 189, 248, 0.4);">GitHub</a>
     </div>
   </header>
 
@@ -237,23 +300,34 @@
 
     <main>
       <section id="overview">
-        <h1>api-quick Documentation</h1>
-        <p><strong>api-quick</strong> is a high-performance, multi-interface HTTP engine, static code analysis sniffer, and API workbench designed for modern software engineers and CI/CD pipelines.</p>
+        <div class="hero-banner">
+          <div class="hero-title">api-quick Documentation Platform</div>
+          <div class="hero-sub">High-Performance Multi-Interface HTTP Engine, Polyglot AST Route Sniffer & CI/CD Automation Workbench.</div>
+        </div>
+
+        <p><strong>api-quick</strong> is a zero-dependency, polyglot API workbench designed for software engineers, backend developers, and automated testing pipelines.</p>
         
         <div class="callout">
-          <strong>Core Vision:</strong> Bridge the gap between ultra-fast terminal execution (cURL speed) and visual interactive workbenches (Postman / Insomnia) without compromising memory footprint or security.
+          <strong>Key Architectural Difference:</strong>  
+          This online documentation platform provides comprehensive technical guides, API references, and CI integration standards. The local embedded workbench (launched via <code>api-quick web</code>) provides live proxy execution, automatic JWT token capture, and workspace AST scanning.
         </div>
       </section>
 
       <section id="installation">
         <h2>Installation Guide</h2>
-        <p>Install <code>@skjuve/api-quick</code> globally via NPM or execute instantly via NPX:</p>
+        <p>Install <code>@skjuve/api-quick</code> globally via NPM or execute instantly using NPX:</p>
 
         <h3>Global Installation (Recommended)</h3>
-        <pre><code>npm install -g @skjuve/api-quick</code></pre>
+        <div class="code-block">
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+          <pre><code>npm install -g @skjuve/api-quick</code></pre>
+        </div>
 
         <h3>Instant Zero-Installation Execution</h3>
-        <pre><code>npx @skjuve/api-quick web</code></pre>
+        <div class="code-block">
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+          <pre><code>npx @skjuve/api-quick web</code></pre>
+        </div>
       </section>
 
       <section id="quickstart">
@@ -273,7 +347,7 @@
             </tr>
             <tr>
               <td><code>api-quick tui</code></td>
-              <td>Launch full interactive Terminal UI workbench</td>
+              <td>Launch interactive Terminal UI workbench</td>
             </tr>
             <tr>
               <td><code>api-quick sniff [dir]</code></td>
@@ -308,7 +382,10 @@
           <li><strong>Spring Boot (Java/Kotlin)</strong></li>
           <li><strong>Laravel (PHP)</strong></li>
         </ul>
-        <pre><code>api-quick sniff</code></pre>
+        <div class="code-block">
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+          <pre><code>api-quick sniff</code></pre>
+        </div>
       </section>
 
       <section id="e2e-workflow">
@@ -319,38 +396,89 @@
       <section id="load-benchmark">
         <h2>High-Throughput Load Benchmark Engine</h2>
         <p>Simulate concurrent HTTP worker pools directly from CLI or Web UI to measure requests per second and latency percentiles (p50, p95, p99).</p>
-        <pre><code>api-quick bench http://localhost:4000/api/v1/auth/me -n 500 -c 20</code></pre>
+        <div class="code-block">
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+          <pre><code>api-quick bench http://localhost:4000/api/v1/auth/me -n 500 -c 20</code></pre>
+        </div>
       </section>
 
       <section id="mock-server">
         <h2>Zero-Latency Mock Server</h2>
         <p>Start a virtual Hono API mock server on port 8080 responding to all sniffed AST routes with structured mock JSON data.</p>
-        <pre><code>api-quick mock --port 8080</code></pre>
+        <div class="code-block">
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+          <pre><code>api-quick mock --port 8080</code></pre>
+        </div>
       </section>
 
       <section id="json-diff">
         <h2>Structural JSON Diff Engine</h2>
         <p>Compare JSON response structures recursively between local and staging/production environments to detect breaking API changes.</p>
-        <pre><code>api-quick diff http://localhost:4000/api/v1/products https://staging.api.com/v1/products</code></pre>
+        <div class="code-block">
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+          <pre><code>api-quick diff http://localhost:4000/api/v1/products https://staging.api.com/v1/products</code></pre>
+        </div>
       </section>
 
       <section id="transpiler">
         <h2>Code Transpiler (--to)</h2>
         <p>Transpile live CLI requests into production-ready code in 8 languages:</p>
-        <pre><code>api-quick POST https://api.stripe.com/v1/charges amount=2000 --to python</code></pre>
+        <div class="code-block">
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+          <pre><code>api-quick POST https://api.stripe.com/v1/charges amount=2000 --to python</code></pre>
+        </div>
       </section>
 
       <section id="ci-assertions">
         <h2>CI/CD Assertion DSL</h2>
         <p>Run zero-dependency automated API assertions in GitHub Actions pipelines with POSIX exit code alignment:</p>
-        <pre><code>api-quick GET https://api.example.com/health \
+        <div class="code-block">
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+          <pre><code>api-quick GET https://api.example.com/health \
   --expect-status 200 \
   --expect-max-time 150ms \
   --expect-json "$.status" = "OK"</code></pre>
+        </div>
       </section>
-
     </main>
   </div>
 
+  <script>
+    const themeToggle = document.getElementById('themeToggle');
+    const themeLabel = document.getElementById('themeLabel');
+    const docSearch = document.getElementById('docSearch');
+    const menuItems = document.querySelectorAll('.menu-item');
+    const themes = ['dark', 'light'];
+    let themeIdx = 0;
+
+    themeToggle.addEventListener('click', () => {
+      themeIdx = (themeIdx + 1) % themes.length;
+      const nextTheme = themes[themeIdx];
+      document.documentElement.setAttribute('data-theme', nextTheme);
+      themeLabel.textContent = nextTheme.toUpperCase();
+    });
+
+    function copyCode(btn) {
+      const code = btn.nextElementSibling.innerText;
+      navigator.clipboard.writeText(code);
+      btn.textContent = 'Copied!';
+      setTimeout(() => btn.textContent = 'Copy', 1500);
+    }
+
+    docSearch.addEventListener('input', (e) => {
+      const query = e.target.value.toLowerCase();
+      document.querySelectorAll('main section').forEach(sec => {
+        const text = sec.innerText.toLowerCase();
+        sec.style.display = text.includes(query) ? 'block' : 'none';
+      });
+    });
+
+    menuItems.forEach(item => {
+      item.addEventListener('click', function() {
+        menuItems.forEach(m => m.classList.remove('active'));
+        this.classList.add('active');
+      });
+    });
+  </script>
 </body>
 </html>
