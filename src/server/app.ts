@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { sniffProjectRoutes } from "../core/ast-sniffer.js";
 import { WorkflowEngine, WorkflowStep } from "../core/workflow.js";
+import { BenchmarkEngine, BenchmarkOptions } from "../core/benchmark.js";
 
 export interface ExecutionLog {
   id: string;
@@ -46,7 +47,6 @@ export function createWebServer(currentPort: number = 4000) {
       const baseHost: string = body.baseHost || `http://localhost:${currentPort}`;
 
       const engine = new WorkflowEngine();
-      // Prepend baseHost to relative step URLs
       const fullSteps = steps.map(s => ({
         ...s,
         urlTemplate: s.urlTemplate.startsWith("http") ? s.urlTemplate : `${baseHost.replace(/\/$/, "")}${s.urlTemplate.startsWith("/") ? "" : "/"}${s.urlTemplate}`
@@ -54,6 +54,27 @@ export function createWebServer(currentPort: number = 4000) {
 
       const results = await engine.runWorkflow(fullSteps, body.initialContext || {});
       return c.json({ results });
+    } catch (err: any) {
+      return c.json({ error: err.message }, 500);
+    }
+  });
+
+  // High-Throughput Load Benchmark API
+  app.post("/api/benchmark/run", async (c) => {
+    try {
+      const body = await c.req.json();
+      const options: BenchmarkOptions = {
+        url: body.url,
+        method: body.method || "GET",
+        headers: body.headers || {},
+        body: body.body,
+        totalRequests: body.totalRequests || 100,
+        concurrency: body.concurrency || 10
+      };
+
+      const engine = new BenchmarkEngine();
+      const result = await engine.runBenchmark(options);
+      return c.json({ result });
     } catch (err: any) {
       return c.json({ error: err.message }, 500);
     }
@@ -315,7 +336,7 @@ function getWebUiHtml(): string {
     .header-right {
       display: flex;
       align-items: center;
-      gap: 14px;
+      gap: 10px;
     }
     .status-indicator {
       display: flex;
@@ -623,16 +644,16 @@ function getWebUiHtml(): string {
     <div class="header-right">
       <button id="runWorkflowBtn" class="btn-primary" style="background: var(--purple);">
         <svg class="icon" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-        Run E2E Workflow Test
+        Run E2E Workflow
+      </button>
+      <button id="runBenchBtn" class="btn-primary" style="background: var(--yellow); color: #000;">
+        <svg class="icon" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+        Load Test ⚡
       </button>
       <a href="/api/openapi.json" target="_blank" class="btn-secondary" style="text-decoration:none;">
         <svg class="icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
-        OpenAPI Spec 3.0
+        OpenAPI 3.0
       </a>
-      <div class="status-indicator">
-        <div class="dot-active"></div>
-        CORS Proxy & AST Scanner Active
-      </div>
       <button id="themeToggleBtn" class="btn-secondary">
         <svg class="icon" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
         <span id="themeLabel">Dark</span>
@@ -704,7 +725,7 @@ function getWebUiHtml(): string {
       <!-- Response Panel -->
       <div class="card">
         <div class="card-header">
-          <span>Response Inspector</span>
+          <span>Response Inspector & Diagnostics</span>
           <span id="metricsBadge" class="status-tag" style="display:none;"></span>
         </div>
         <pre id="responseOutput">// Select any discovered route from the left sidebar to execute request.</pre>
@@ -746,6 +767,7 @@ function getWebUiHtml(): string {
     const themeToggleBtn = document.getElementById('themeToggleBtn');
     const themeLabel = document.getElementById('themeLabel');
     const runWorkflowBtn = document.getElementById('runWorkflowBtn');
+    const runBenchBtn = document.getElementById('runBenchBtn');
 
     let allRoutes = [];
     let allLogs = [];
@@ -757,6 +779,37 @@ function getWebUiHtml(): string {
       const nextTheme = themes[currentThemeIdx];
       document.documentElement.setAttribute('data-theme', nextTheme);
       themeLabel.textContent = nextTheme.toUpperCase();
+    });
+
+    runBenchBtn.addEventListener('click', async () => {
+      const url = urlInput.value.trim();
+      if (!url) return alert('Please select a route to benchmark');
+
+      responseOutput.textContent = 'Running High-Throughput Concurrent Load Benchmark (100 requests, 10 workers)...';
+      metricsBadge.style.display = 'none';
+
+      try {
+        const res = await fetch('/api/benchmark/run', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            url,
+            method: methodSelect.value,
+            totalRequests: 100,
+            concurrency: 10
+          })
+        });
+
+        const data = await res.json();
+        responseOutput.textContent = JSON.stringify(data.result, null, 2);
+        
+        metricsBadge.style.display = 'inline-block';
+        metricsBadge.className = 'status-tag status-2xx';
+        metricsBadge.textContent = \`Benchmark: \${data.result.requestsPerSecond} req/s (p95: \${data.result.p95Ms}ms)\`;
+
+      } catch (err) {
+        responseOutput.textContent = 'Benchmark Error: ' + err.message;
+      }
     });
 
     runWorkflowBtn.addEventListener('click', async () => {
