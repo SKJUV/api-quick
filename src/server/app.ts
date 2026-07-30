@@ -564,7 +564,7 @@ function getWebUiHtml(): string {
         <span style="color: var(--text-muted); font-weight: 600;">Target Host:</span>
         <input type="text" id="baseHostInput" value="http://localhost:4000" style="width: 200px; padding: 4px 8px; font-size: 0.82rem;" />
         <span style="color: var(--text-muted); font-weight: 600; margin-left: 10px;">Bearer Auth Token:</span>
-        <input type="text" id="authTokenInput" placeholder="Paste Bearer Token or auto-capture on /login..." style="flex: 1; padding: 4px 8px; font-size: 0.82rem; color: var(--accent);" />
+        <input type="text" id="authTokenInput" placeholder="Paste Bearer Token or run /login to auto-capture..." style="flex: 1; padding: 4px 8px; font-size: 0.82rem; color: var(--accent);" />
       </div>
       <div id="activePortsNotice" style="color: var(--green); font-size: 0.8rem; font-weight: 500;"></div>
     </div>
@@ -600,7 +600,7 @@ function getWebUiHtml(): string {
             <option value="PATCH">PATCH</option>
             <option value="DELETE">DELETE</option>
           </select>
-          <input type="text" id="urlInput" value="http://localhost:4000/api/v1/admin/dashboard" placeholder="Enter target request URL..." />
+          <input type="text" id="urlInput" value="http://localhost:4000/api/v1/auth/login" placeholder="Enter target request URL..." />
           <button class="btn-primary" id="sendBtn">
             <svg class="icon" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
             Execute
@@ -614,7 +614,7 @@ function getWebUiHtml(): string {
 
         <div class="form-group">
           <label>JSON Body Payload</label>
-          <textarea id="bodyInput" placeholder='{\n  "email": "admin@example.com",\n  "password": "secretpassword"\n}'></textarea>
+          <textarea id="bodyInput" placeholder='{\n  "email": "user@example.com",\n  "password": "yourpassword"\n}'></textarea>
         </div>
       </div>
 
@@ -675,13 +675,28 @@ function getWebUiHtml(): string {
       themeLabel.textContent = nextTheme.toUpperCase();
     });
 
+    function extractTokenRecursive(obj) {
+      if (!obj || typeof obj !== 'object') return null;
+      const keys = ['token', 'accessToken', 'access_token', 'jwt', 'authToken', 'auth_token', 'bearerToken', 'bearer'];
+      for (const k of keys) {
+        if (obj[k] && typeof obj[k] === 'string' && obj[k].length > 10) return obj[k];
+      }
+      for (const k in obj) {
+        if (typeof obj[k] === 'object') {
+          const res = extractTokenRecursive(obj[k]);
+          if (res) return res;
+        }
+      }
+      return null;
+    }
+
     async function probeActivePorts() {
       try {
         const res = await fetch('/api/probe-ports');
         const data = await res.json();
         if (data.activePorts && data.activePorts.length > 0) {
           activePortsNotice.style.color = 'var(--green)';
-          activePortsNotice.textContent = 'Active running backend detected on port: ' + data.activePorts[0];
+          activePortsNotice.textContent = '🟢 Active running backend detected on port: ' + data.activePorts[0];
           baseHostInput.value = 'http://localhost:' + data.activePorts[0];
         }
       } catch (e) {}
@@ -745,7 +760,10 @@ function getWebUiHtml(): string {
           cleanPath = cleanPath.replace(/:([a-zA-Z0-9_]+)/g, '1');
 
           urlInput.value = r.path.startsWith('http') ? r.path : baseHost + cleanPath;
-          if (r.suggestedBody && Object.keys(r.suggestedBody).length > 0) {
+
+          if (r.path.includes('login') || r.path.includes('auth')) {
+            bodyInput.value = JSON.stringify({ email: "user@example.com", password: "password123" }, null, 2);
+          } else if (r.suggestedBody && Object.keys(r.suggestedBody).length > 0) {
             bodyInput.value = JSON.stringify(r.suggestedBody, null, 2);
           } else {
             bodyInput.value = '';
@@ -861,9 +879,9 @@ function getWebUiHtml(): string {
           const parsed = JSON.parse(text);
           responseOutput.textContent = JSON.stringify(parsed, null, 2);
 
-          // Auto-capture token if response returns token
-          const extractedToken = parsed.token || parsed.accessToken || parsed.access_token || parsed.jwt;
-          if (extractedToken && typeof extractedToken === 'string') {
+          // Recursive auto-capture token if response returns token
+          const extractedToken = extractTokenRecursive(parsed);
+          if (extractedToken) {
             authTokenInput.value = extractedToken;
           }
         } catch {
