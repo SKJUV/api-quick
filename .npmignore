@@ -1,0 +1,5 @@
+src/
+.github/
+tsconfig.json
+.system_generated/
+*.log

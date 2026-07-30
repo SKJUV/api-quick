@@ -1,11 +1,17 @@
 {
   "name": "api-quick",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "High-Performance Multi-Interface HTTP Engine, Automation & API Workbench",
   "main": "dist/index.js",
   "bin": {
     "api-quick": "bin/api-quick.js"
   },
+  "files": [
+    "dist",
+    "bin",
+    "README.md",
+    "LICENSE"
+  ],
   "type": "module",
   "scripts": {
     "build": "tsc",
@@ -26,6 +32,10 @@
     "httpie",
     "curl"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SKJUV/api-quick.git"
+  },
   "author": "SKJUV",
   "license": "MIT",
   "dependencies": {
