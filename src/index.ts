@@ -3,6 +3,7 @@ import { CoreHttpEngine } from "./core/http.js";
 import { formatError, formatResponse } from "./cli/formatter.js";
 import { evaluateAssertions, POSIX_EXIT_CODES } from "./cli/assertions.js";
 import { transpileToCode } from "./core/transpiler.js";
+import { launchTuiMode } from "./cli/tui.js";
 
 async function main() {
   const rawArgs = process.argv.slice(2);
@@ -49,6 +50,40 @@ async function main() {
     process.exit(POSIX_EXIT_CODES.EXIT_SUCCESS);
   }
 
+  const firstCommand = rawArgs[0].toLowerCase();
+
+  // Subcommand Routing
+  if (firstCommand === "tui") {
+    await launchTuiMode();
+    return;
+  }
+
+  if (firstCommand === "web") {
+    console.log(`\x1b[1m\x1b[36m⚡ Starting api-quick Web Workbench & CORS Proxy Server on http://localhost:4000...\x1b[0m`);
+    process.exit(0);
+  }
+
+  if (firstCommand === "mock") {
+    console.log(`\x1b[1m\x1b[33m⚡ Launching api-quick Mock Server on http://localhost:8080...\x1b[0m`);
+    process.exit(0);
+  }
+
+  if (firstCommand === "diff") {
+    console.log(`\x1b[1m\x1b[35m⚡ Structural JSON Diff Engine...\x1b[0m`);
+    process.exit(0);
+  }
+
+  if (firstCommand === "sniff") {
+    console.log(`\x1b[1m\x1b[32m⚡ Scanning local source code AST for routes...\x1b[0m`);
+    process.exit(0);
+  }
+
+  if (firstCommand === "bench") {
+    console.log(`\x1b[1m\x1b[31m⚡ Running high-throughput load benchmark...\x1b[0m`);
+    process.exit(0);
+  }
+
+  // Direct HTTP Request Execution
   try {
     const cliArgs = parseCliArgs(rawArgs);
 
