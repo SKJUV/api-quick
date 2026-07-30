@@ -411,15 +411,21 @@ function getWebUiHtml(): string {
       padding: 8px 12px;
       border-bottom: 1px solid var(--border);
       background: var(--card-bg);
+      display: flex;
+      gap: 8px;
     }
     .search-input-box input {
-      width: 100%;
+      flex: 1;
       background: var(--input-bg);
       border: 1px solid var(--border);
       border-radius: 4px;
       padding: 6px 10px;
       color: var(--text);
       font-size: 0.8rem;
+    }
+    .search-input-box select {
+      padding: 4px 8px;
+      font-size: 0.78rem;
     }
 
     .group-header {
@@ -644,7 +650,7 @@ function getWebUiHtml(): string {
     <div class="header-right">
       <button id="authGuideBtn" class="btn-secondary" style="color: var(--accent); border-color: rgba(56, 189, 248, 0.4);">
         <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
-        Auth Token Guide
+        Auth Guide
       </button>
       <button id="runWorkflowBtn" class="btn-primary" style="background: var(--purple);">
         <svg class="icon" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
@@ -689,6 +695,11 @@ function getWebUiHtml(): string {
         </div>
         <div class="search-input-box">
           <input type="text" id="routeSearchInput" placeholder="Filter routes by path, tag, or method..." />
+          <select id="secFilterSelect">
+            <option value="all">All Routes</option>
+            <option value="auth">🔒 Token Required</option>
+            <option value="public">🔓 Public</option>
+          </select>
         </div>
         <div id="routeList" class="route-list">
           <div style="padding: 16px; color: var(--text-muted); font-size: 0.8rem;">Scanning workspace directory...</div>
@@ -755,6 +766,7 @@ function getWebUiHtml(): string {
     const routeList = document.getElementById('routeList');
     const routeCount = document.getElementById('routeCount');
     const routeSearchInput = document.getElementById('routeSearchInput');
+    const secFilterSelect = document.getElementById('secFilterSelect');
     const resniffBtn = document.getElementById('resniffBtn');
     const sendBtn = document.getElementById('sendBtn');
     const methodSelect = document.getElementById('methodSelect');
@@ -934,12 +946,20 @@ function getWebUiHtml(): string {
 
     function renderRoutes(routes) {
       const searchTerm = routeSearchInput.value.toLowerCase().trim();
-      const filtered = routes.filter(r => 
-        r.path.toLowerCase().includes(searchTerm) || 
-        r.method.toLowerCase().includes(searchTerm) ||
-        r.tag.toLowerCase().includes(searchTerm) ||
-        r.framework.toLowerCase().includes(searchTerm)
-      );
+      const secFilter = secFilterSelect.value;
+
+      const filtered = routes.filter(r => {
+        const matchesSearch = r.path.toLowerCase().includes(searchTerm) || 
+                              r.method.toLowerCase().includes(searchTerm) ||
+                              r.tag.toLowerCase().includes(searchTerm) ||
+                              r.framework.toLowerCase().includes(searchTerm);
+        
+        const matchesSec = secFilter === 'all' || 
+                           (secFilter === 'auth' && r.requiresAuth) ||
+                           (secFilter === 'public' && !r.requiresAuth);
+
+        return matchesSearch && matchesSec;
+      });
 
       routeCount.textContent = filtered.length;
 
@@ -1047,6 +1067,7 @@ function getWebUiHtml(): string {
     }
 
     routeSearchInput.addEventListener('input', () => renderRoutes(allRoutes));
+    secFilterSelect.addEventListener('change', () => renderRoutes(allRoutes));
     resniffBtn.addEventListener('click', loadDiscoveredRoutes);
 
     clearLogsBtn.addEventListener('click', async () => {
