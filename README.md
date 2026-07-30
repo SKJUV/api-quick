@@ -4,8 +4,10 @@
 > *CLI / Interactive TUI / Web Workbench / Headless CI Automation*
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)]()
-[![Node Compatibility](https://img.shields.io/badge/Node-v20+-green?logo=node.js)]()
+[![NPM Version](https://img.shields.io/npm/v/@skjuve/api-quick.svg)](https://www.npmjs.com/package/@skjuve/api-quick)
+[![Documentation](https://img.shields.io/badge/Documentation-Online-brightgreen.svg)](https://skjuv.github.io/api-quick)
+
+Official Documentation Website: **[https://skjuv.github.io/api-quick](https://skjuv.github.io/api-quick)**
 
 `api-quick` is a zero-latency, polyglot API workbench designed for modern developers and high-throughput CI/CD pipelines. It bridges the gap between ultra-fast terminal execution (`curl` / `httpie` speed) and visual interactive workbenches (`Postman` / `Insomnia`), without compromising memory footprint or security.
 
@@ -30,12 +32,12 @@
 
 ### Via NPM
 ```bash
-npm install -g .
+npm install -g @skjuve/api-quick
 ```
 
 ### Direct Execution via NPX
 ```bash
-npx api-quick --help
+npx @skjuve/api-quick web
 ```
 
 ---
@@ -100,6 +102,7 @@ api-quick GET https://api.example.com/health \
 ```
 api-quick/
 ├── bin/                  # Global CLI Executable Wrappers
+├── docs/                 # Official Documentation Platform Website
 ├── src/                  # Core TypeScript Source Code
 │   ├── cli/              # Argument Parsing, ANSI Formatter, TUI, Assertions
 │   ├── core/             # HTTP Engine, AST Sniffer, Workflows, Benchmark, Mock, Diff
