@@ -642,6 +642,10 @@ function getWebUiHtml(): string {
       <span class="badge">v0.1.0 Engine</span>
     </div>
     <div class="header-right">
+      <button id="authGuideBtn" class="btn-secondary" style="color: var(--accent); border-color: rgba(56, 189, 248, 0.4);">
+        <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+        Auth Token Guide
+      </button>
       <button id="runWorkflowBtn" class="btn-primary" style="background: var(--purple);">
         <svg class="icon" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
         Run E2E Workflow
@@ -668,7 +672,7 @@ function getWebUiHtml(): string {
         <span style="color: var(--text-muted); font-weight: 600;">Target Host:</span>
         <input type="text" id="baseHostInput" value="http://localhost:4000" style="width: 200px; padding: 4px 8px; font-size: 0.82rem;" />
         <span style="color: var(--text-muted); font-weight: 600; margin-left: 10px;">Bearer Auth Token:</span>
-        <input type="text" id="authTokenInput" placeholder="Paste Bearer Token or run /login to auto-capture..." style="flex: 1; padding: 4px 8px; font-size: 0.82rem; color: var(--accent);" />
+        <input type="text" id="authTokenInput" placeholder="Paste Bearer Token or run /sync to auto-capture..." style="flex: 1; padding: 4px 8px; font-size: 0.82rem; color: var(--accent);" />
       </div>
       <div id="activePortsNotice" style="color: var(--green); font-size: 0.8rem; font-weight: 500;"></div>
     </div>
@@ -704,7 +708,7 @@ function getWebUiHtml(): string {
             <option value="PATCH">PATCH</option>
             <option value="DELETE">DELETE</option>
           </select>
-          <input type="text" id="urlInput" value="http://localhost:4000/api/v1/auth/login" placeholder="Enter target request URL..." />
+          <input type="text" id="urlInput" value="http://localhost:4000/api/v1/auth/sync" placeholder="Enter target request URL..." />
           <button class="btn-primary" id="sendBtn">
             <svg class="icon" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
             Execute
@@ -768,6 +772,7 @@ function getWebUiHtml(): string {
     const themeLabel = document.getElementById('themeLabel');
     const runWorkflowBtn = document.getElementById('runWorkflowBtn');
     const runBenchBtn = document.getElementById('runBenchBtn');
+    const authGuideBtn = document.getElementById('authGuideBtn');
 
     let allRoutes = [];
     let allLogs = [];
@@ -779,6 +784,23 @@ function getWebUiHtml(): string {
       const nextTheme = themes[currentThemeIdx];
       document.documentElement.setAttribute('data-theme', nextTheme);
       themeLabel.textContent = nextTheme.toUpperCase();
+    });
+
+    authGuideBtn.addEventListener('click', () => {
+      alert(\`🔑 GUIDE D'AUTHENTIFICATION & DU TOKEN JWT :
+
+1. Pourquoi 404 sur /api/v1/auth/login ?
+   Dans ce projet Express, l'endpoint de connexion est POST /api/v1/auth/sync (situé dans auth.routes.js:18), et non /login !
+
+2. Où se trouve le jeton JWT par type de backend ?
+   - Express / Node: POST /api/v1/auth/sync ou /login -> { "token": "..." }
+   - NestJS: POST /auth/login -> { "accessToken": "..." }
+   - FastAPI (Python): POST /token -> { "access_token": "...", "token_type": "bearer" }
+   - Django REST: POST /api/token/ -> { "access": "..." }
+   - Laravel Sanctum: POST /api/login -> { "token": "..." }
+
+3. Détection Automatique :
+   Dès que vous exécuterez POST /api/v1/auth/sync, api-quick capturera automatiquement le jeton et le remplira dans le champ "Bearer Auth Token" !\`);
     });
 
     runBenchBtn.addEventListener('click', async () => {
@@ -822,7 +844,7 @@ function getWebUiHtml(): string {
           id: 'step-1',
           name: '1. Auth Login / Sync',
           method: 'POST',
-          urlTemplate: '/api/v1/auth/login',
+          urlTemplate: '/api/v1/auth/sync',
           bodyTemplate: JSON.stringify({ email: "admin@example.com", password: "secretpassword" })
         },
         {
@@ -965,7 +987,7 @@ function getWebUiHtml(): string {
             cleanPath = cleanPath.replace(/:([a-zA-Z0-9_]+)/g, '1');
             urlInput.value = r.path.startsWith('http') ? r.path : baseHost + cleanPath;
 
-            if (r.path.includes('login') || r.path.includes('auth')) {
+            if (r.path.includes('login') || r.path.includes('auth') || r.path.includes('sync')) {
               bodyInput.value = JSON.stringify({ email: "user@example.com", password: "password123" }, null, 2);
             } else if (r.suggestedBody && Object.keys(r.suggestedBody).length > 0) {
               bodyInput.value = JSON.stringify(r.suggestedBody, null, 2);
