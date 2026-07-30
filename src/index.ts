@@ -1,3 +1,4 @@
+import net from "node:net";
 import { parseCliArgs } from "./cli/parser.js";
 import { CoreHttpEngine } from "./core/http.js";
 import { formatError, formatResponse } from "./cli/formatter.js";
@@ -6,6 +7,19 @@ import { transpileToCode } from "./core/transpiler.js";
 import { launchTuiMode } from "./cli/tui.js";
 import { createWebServer } from "./server/app.js";
 import { serve } from "@hono/node-server";
+
+async function findAvailablePort(startPort: number): Promise<number> {
+  return new Promise((resolve) => {
+    const server = net.createServer();
+    server.listen(startPort, () => {
+      const { port } = server.address() as net.AddressInfo;
+      server.close(() => resolve(port));
+    });
+    server.on("error", () => {
+      resolve(findAvailablePort(startPort + 1));
+    });
+  });
+}
 
 async function main() {
   const rawArgs = process.argv.slice(2);
@@ -61,20 +75,26 @@ async function main() {
   }
 
   if (firstCommand === "web") {
-    let port = 4000;
+    let requestedPort = 4000;
     const portIdx = rawArgs.indexOf("--port");
     if (portIdx !== -1 && rawArgs[portIdx + 1]) {
-      port = parseInt(rawArgs[portIdx + 1], 10);
+      requestedPort = parseInt(rawArgs[portIdx + 1], 10);
+    }
+
+    const availablePort = await findAvailablePort(requestedPort);
+
+    if (availablePort !== requestedPort) {
+      console.log(`\x1b[33m⚠️ Port ${requestedPort} is already in use. Automatically switching to port ${availablePort}...\x1b[0m`);
     }
 
     const app = createWebServer();
     console.log(`\n\x1b[1m\x1b[36m⚡ Launching api-quick Web Workbench & CORS Proxy Server...\x1b[0m`);
-    console.log(`\x1b[32m✔ Server running at:\x1b[0m \x1b[1mhttp://localhost:${port}\x1b[0m`);
+    console.log(`\x1b[32m✔ Server running at:\x1b[0m \x1b[1mhttp://localhost:${availablePort}\x1b[0m`);
     console.log(`\x1b[90m(Press Ctrl+C to stop)\x1b[0m\n`);
 
     serve({
       fetch: app.fetch,
-      port
+      port: availablePort
     });
     return;
   }
