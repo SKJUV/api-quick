@@ -5,9 +5,9 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![NPM Version](https://img.shields.io/npm/v/@skjuve/api-quick.svg)](https://www.npmjs.com/package/@skjuve/api-quick)
-[![Documentation](https://img.shields.io/badge/Documentation-Online-brightgreen.svg)](https://skjuv.github.io/api-quick)
+[![Documentation](https://img.shields.io/badge/Documentation-Online-brightgreen.svg)](https://quick-cli.vercel.app)
 
-Official Documentation Website: **[https://skjuv.github.io/api-quick](https://skjuv.github.io/api-quick)**
+Official Documentation Website: **[https://quick-cli.vercel.app](https://quick-cli.vercel.app)**
 
 `api-quick` is a zero-latency, polyglot API workbench designed for modern developers and high-throughput CI/CD pipelines. It bridges the gap between ultra-fast terminal execution (`curl` / `httpie` speed) and visual interactive workbenches (`Postman` / `Insomnia`), without compromising memory footprint or security.
 
