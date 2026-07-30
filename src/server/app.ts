@@ -635,6 +635,53 @@ function getWebUiHtml(): string {
     .log-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
     .log-url { font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .log-meta { font-size: 0.72rem; color: var(--text-muted); margin-top: 4px; display: flex; justify-content: space-between; }
+
+    /* Modal Overlay UI */
+    .modal-backdrop {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; width: 100vw; height: 100vh;
+      background: rgba(0,0,0,0.7);
+      backdrop-filter: blur(4px);
+      z-index: 999;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-box {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      width: 600px;
+      max-width: 90vw;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    }
+    .modal-body {
+      padding: 16px;
+      font-size: 0.85rem;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      max-height: 70vh;
+      overflow-y: auto;
+    }
+    .guide-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.8rem;
+      margin-top: 6px;
+    }
+    .guide-table th, .guide-table td {
+      border: 1px solid var(--border);
+      padding: 8px 10px;
+      text-align: left;
+    }
+    .guide-table th {
+      background: var(--card-bg);
+      color: var(--accent);
+    }
     
     svg.icon { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
   </style>
@@ -762,6 +809,61 @@ function getWebUiHtml(): string {
     </div>
   </div>
 
+  <!-- Auth Guide Modal UI -->
+  <div id="guideModalBackdrop" class="modal-backdrop">
+    <div class="modal-box">
+      <div class="card-header">
+        <span>Authentication & JWT Token Guide</span>
+        <button id="closeGuideModalBtn" class="btn-secondary">X</button>
+      </div>
+      <div class="modal-body">
+        <p>This guide explains how JWT Bearer Tokens are automatically captured and injected into your requests across different framework architectures.</p>
+        
+        <table class="guide-table">
+          <thead>
+            <tr>
+              <th>Framework</th>
+              <th>Login Endpoint</th>
+              <th>Token JSON Response Key</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Express / Node.js (Papyrus)</strong></td>
+              <td><code>POST /api/v1/auth/sync</code></td>
+              <td><code>{ "token": "eyJhbG..." }</code></td>
+            </tr>
+            <tr>
+              <td><strong>NestJS (TypeScript)</strong></td>
+              <td><code>POST /auth/login</code></td>
+              <td><code>{ "accessToken": "eyJhbG..." }</code></td>
+            </tr>
+            <tr>
+              <td><strong>FastAPI (Python)</strong></td>
+              <td><code>POST /token</code></td>
+              <td><code>{ "access_token": "eyJhbG..." }</code></td>
+            </tr>
+            <tr>
+              <td><strong>Django REST</strong></td>
+              <td><code>POST /api/token/</code></td>
+              <td><code>{ "access": "eyJhbG..." }</code></td>
+            </tr>
+            <tr>
+              <td><strong>Laravel Sanctum (PHP)</strong></td>
+              <td><code>POST /api/login</code></td>
+              <td><code>{ "token": "eyJhbG..." }</code></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div style="background: var(--card-bg); padding: 10px; border-radius: 4px; border: 1px solid var(--border); font-size: 0.78rem; margin-top: 6px;">
+          <strong>Automatic Token Injection:</strong><br />
+          When you execute any login endpoint that returns a token key, <code>api-quick</code> recursively extracts the token and populates the <code>Bearer Auth Token</code> header bar automatically!
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script>
     const routeList = document.getElementById('routeList');
     const routeCount = document.getElementById('routeCount');
@@ -785,6 +887,8 @@ function getWebUiHtml(): string {
     const runWorkflowBtn = document.getElementById('runWorkflowBtn');
     const runBenchBtn = document.getElementById('runBenchBtn');
     const authGuideBtn = document.getElementById('authGuideBtn');
+    const guideModalBackdrop = document.getElementById('guideModalBackdrop');
+    const closeGuideModalBtn = document.getElementById('closeGuideModalBtn');
 
     let allRoutes = [];
     let allLogs = [];
@@ -799,20 +903,15 @@ function getWebUiHtml(): string {
     });
 
     authGuideBtn.addEventListener('click', () => {
-      alert(\`🔑 GUIDE D'AUTHENTIFICATION & DU TOKEN JWT :
+      guideModalBackdrop.style.display = 'flex';
+    });
 
-1. Pourquoi 404 sur /api/v1/auth/login ?
-   Dans ce projet Express, l'endpoint de connexion est POST /api/v1/auth/sync (situé dans auth.routes.js:18), et non /login !
+    closeGuideModalBtn.addEventListener('click', () => {
+      guideModalBackdrop.style.display = 'none';
+    });
 
-2. Où se trouve le jeton JWT par type de backend ?
-   - Express / Node: POST /api/v1/auth/sync ou /login -> { "token": "..." }
-   - NestJS: POST /auth/login -> { "accessToken": "..." }
-   - FastAPI (Python): POST /token -> { "access_token": "...", "token_type": "bearer" }
-   - Django REST: POST /api/token/ -> { "access": "..." }
-   - Laravel Sanctum: POST /api/login -> { "token": "..." }
-
-3. Détection Automatique :
-   Dès que vous exécuterez POST /api/v1/auth/sync, api-quick capturera automatiquement le jeton et le remplira dans le champ "Bearer Auth Token" !\`);
+    guideModalBackdrop.addEventListener('click', (e) => {
+      if (e.target === guideModalBackdrop) guideModalBackdrop.style.display = 'none';
     });
 
     runBenchBtn.addEventListener('click', async () => {
