@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { sniffProjectRoutes } from "../core/ast-sniffer.js";
+import { WorkflowEngine, WorkflowStep } from "../core/workflow.js";
 
 export interface ExecutionLog {
   id: string;
@@ -21,13 +22,10 @@ const executionLogs: ExecutionLog[] = [];
 export function createWebServer(currentPort: number = 4000) {
   const app = new Hono();
 
-  // Allow all CORS origins for local web client
   app.use("*", cors({ origin: "*", allowMethods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"] }));
 
-  // Health check endpoint
   app.get("/api/health", (c) => c.json({ status: "ok", engine: "api-quick", version: "0.1.0" }));
 
-  // Discovered routes AST endpoint with deduplication
   app.get("/api/routes", (c) => {
     const rawRoutes = sniffProjectRoutes();
     const seen = new Set<string>();
@@ -40,7 +38,27 @@ export function createWebServer(currentPort: number = 4000) {
     return c.json({ routes: deduplicatedRoutes, count: deduplicatedRoutes.length });
   });
 
-  // OpenAPI 3.0 Specification Exporter Endpoint (Swagger compatible)
+  // E2E Workflow Execution API
+  app.post("/api/workflow/run", async (c) => {
+    try {
+      const body = await c.req.json();
+      const steps: WorkflowStep[] = body.steps || [];
+      const baseHost: string = body.baseHost || `http://localhost:${currentPort}`;
+
+      const engine = new WorkflowEngine();
+      // Prepend baseHost to relative step URLs
+      const fullSteps = steps.map(s => ({
+        ...s,
+        urlTemplate: s.urlTemplate.startsWith("http") ? s.urlTemplate : `${baseHost.replace(/\/$/, "")}${s.urlTemplate.startsWith("/") ? "" : "/"}${s.urlTemplate}`
+      }));
+
+      const results = await engine.runWorkflow(fullSteps, body.initialContext || {});
+      return c.json({ results });
+    } catch (err: any) {
+      return c.json({ error: err.message }, 500);
+    }
+  });
+
   app.get("/api/openapi.json", (c) => {
     const routes = sniffProjectRoutes();
     const paths: Record<string, any> = {};
@@ -84,13 +102,12 @@ export function createWebServer(currentPort: number = 4000) {
     return c.json(openApiSpec);
   });
 
-  // Probe active local ports to find running backend (EXCLUDING api-quick's own port!)
   app.get("/api/probe-ports", async (c) => {
     const candidatePorts = [3000, 4000, 5000, 8080, 8000, 3001, 5001, 9000, 3002];
     const activePorts: number[] = [];
 
     for (const port of candidatePorts) {
-      if (port === currentPort) continue; // EXCLUDE api-quick's own port!
+      if (port === currentPort) continue;
 
       try {
         const controller = new AbortController();
@@ -99,31 +116,25 @@ export function createWebServer(currentPort: number = 4000) {
         clearTimeout(timeoutId);
         if (res.status) activePorts.push(port);
       } catch {
-        // Port not active or refused
+        // Port not active
       }
     }
     return c.json({ activePorts, currentPort });
   });
 
-  // Action execution logs history endpoint
-  app.get("/api/logs", (c) => {
-    return c.json({ logs: executionLogs, count: executionLogs.length });
-  });
+  app.get("/api/logs", (c) => c.json({ logs: executionLogs, count: executionLogs.length }));
 
-  // Clear execution logs
   app.delete("/api/logs", (c) => {
     executionLogs.length = 0;
     return c.json({ status: "cleared" });
   });
 
-  // CORS Bypass Proxy endpoint with automatic Telemetry Logging & Security Redaction
   app.all("/proxy/*", async (c) => {
     const targetUrl = c.req.header("X-Api-Quick-Target-Url");
     if (!targetUrl) {
       return c.json({ error: "Missing X-Api-Quick-Target-Url Header" }, 400);
     }
 
-    // SSRF Security Check: Block non-http/https protocols
     if (!targetUrl.startsWith("http://") && !targetUrl.startsWith("https://")) {
       return c.json({ error: "Security Error: Only HTTP/HTTPS target protocols are allowed." }, 400);
     }
@@ -153,10 +164,8 @@ export function createWebServer(currentPort: number = 4000) {
       totalTime = Math.round((performance.now() - startTime) * 100) / 100;
       status = proxyResponse.status;
       statusText = proxyResponse.statusText;
-
       responseText = await proxyResponse.text();
 
-      // Log execution telemetry (Sanitize sensitive fields)
       executionLogs.unshift({
         id: `log-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
         timestamp: new Date().toLocaleTimeString(),
@@ -199,10 +208,7 @@ export function createWebServer(currentPort: number = 4000) {
     }
   });
 
-  // Serve static SPA HTML fallback
-  app.get("*", (c) => {
-    return c.html(getWebUiHtml());
-  });
+  app.get("*", (c) => c.html(getWebUiHtml()));
 
   return app;
 }
@@ -615,6 +621,10 @@ function getWebUiHtml(): string {
       <span class="badge">v0.1.0 Engine</span>
     </div>
     <div class="header-right">
+      <button id="runWorkflowBtn" class="btn-primary" style="background: var(--purple);">
+        <svg class="icon" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+        Run E2E Workflow Test
+      </button>
       <a href="/api/openapi.json" target="_blank" class="btn-secondary" style="text-decoration:none;">
         <svg class="icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
         OpenAPI Spec 3.0
@@ -735,6 +745,7 @@ function getWebUiHtml(): string {
     const activePortsNotice = document.getElementById('activePortsNotice');
     const themeToggleBtn = document.getElementById('themeToggleBtn');
     const themeLabel = document.getElementById('themeLabel');
+    const runWorkflowBtn = document.getElementById('runWorkflowBtn');
 
     let allRoutes = [];
     let allLogs = [];
@@ -746,6 +757,57 @@ function getWebUiHtml(): string {
       const nextTheme = themes[currentThemeIdx];
       document.documentElement.setAttribute('data-theme', nextTheme);
       themeLabel.textContent = nextTheme.toUpperCase();
+    });
+
+    runWorkflowBtn.addEventListener('click', async () => {
+      responseOutput.textContent = 'Running Full E2E Workflow Test Scenario...';
+      metricsBadge.style.display = 'none';
+
+      const baseHost = baseHostInput.value.trim();
+      const defaultSteps = [
+        {
+          id: 'step-1',
+          name: '1. Auth Login / Sync',
+          method: 'POST',
+          urlTemplate: '/api/v1/auth/login',
+          bodyTemplate: JSON.stringify({ email: "admin@example.com", password: "secretpassword" })
+        },
+        {
+          id: 'step-2',
+          name: '2. Get User Profile',
+          method: 'GET',
+          urlTemplate: '/api/v1/auth/me'
+        },
+        {
+          id: 'step-3',
+          name: '3. Fetch Admin Dashboard',
+          method: 'GET',
+          urlTemplate: '/api/v1/admin/dashboard'
+        }
+      ];
+
+      try {
+        const res = await fetch('/api/workflow/run', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            baseHost,
+            steps: defaultSteps,
+            initialContext: { authToken: authTokenInput.value.trim() }
+          })
+        });
+
+        const data = await res.json();
+        responseOutput.textContent = JSON.stringify(data, null, 2);
+        
+        metricsBadge.style.display = 'inline-block';
+        metricsBadge.className = 'status-tag status-2xx';
+        metricsBadge.textContent = 'E2E Workflow Complete';
+
+        setTimeout(loadExecutionLogs, 100);
+      } catch (err) {
+        responseOutput.textContent = 'Workflow Error: ' + err.message;
+      }
     });
 
     function extractTokenRecursive(obj) {
@@ -811,7 +873,6 @@ function getWebUiHtml(): string {
         return;
       }
 
-      // Group routes by Swagger Tag & Execution Order Sequence
       const grouped = {};
       filtered.forEach(r => {
         const groupTitle = \`Step \${r.executionOrder}: \${r.tag}\`;
@@ -848,9 +909,7 @@ function getWebUiHtml(): string {
             let baseHost = baseHostInput.value.trim().replace(/\\/$/, '');
             let cleanPath = r.path.startsWith('/') ? r.path : '/' + r.path;
 
-            // Replace route URL params like :id with dummy sample value
             cleanPath = cleanPath.replace(/:([a-zA-Z0-9_]+)/g, '1');
-
             urlInput.value = r.path.startsWith('http') ? r.path : baseHost + cleanPath;
 
             if (r.path.includes('login') || r.path.includes('auth')) {
@@ -936,7 +995,6 @@ function getWebUiHtml(): string {
         return alert('Invalid JSON in Headers');
       }
 
-      // Auto-inject Bearer Token if populated
       const token = authTokenInput.value.trim();
       if (token) {
         headers['Authorization'] = token.startsWith('Bearer ') ? token : 'Bearer ' + token;
@@ -972,7 +1030,6 @@ function getWebUiHtml(): string {
           const parsed = JSON.parse(text);
           responseOutput.textContent = JSON.stringify(parsed, null, 2);
 
-          // Recursive auto-capture token if response returns token
           const extractedToken = extractTokenRecursive(parsed);
           if (extractedToken) {
             authTokenInput.value = extractedToken;
