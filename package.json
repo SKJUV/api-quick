@@ -18,7 +18,8 @@
     "prepare": "npm run build",
     "dev": "tsx watch src/index.ts",
     "test": "node --test",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "ci": "tsc && node dist/index.js sniff"
   },
   "keywords": [
     "http",
