@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>api-quick — Official Documentation & Architecture Guide</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #090d16;
+      --panel: #131b2e;
+      --card-bg: #182238;
+      --border: #23314d;
+      --border-hover: #33466d;
+      --text: #f1f5f9;
+      --text-muted: #94a3b8;
+      --primary: #0284c7;
+      --primary-hover: #0369a1;
+      --accent: #38bdf8;
+      --green: #10b981;
+      --yellow: #f59e0b;
+      --red: #ef4444;
+      --purple: #8b5cf6;
+      --sidebar-width: 280px;
+    }
+    
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    header {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      height: 60px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      z-index: 100;
+    }
+    .logo {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: var(--accent);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+    }
+    .badge {
+      background: rgba(56, 189, 248, 0.1);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      color: var(--accent);
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .nav-link {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 0.85rem;
+      font-weight: 500;
+      transition: color 0.15s;
+    }
+    .nav-link:hover { color: var(--text); }
+    .btn-github {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 6px 14px;
+      border-radius: 6px;
+      text-decoration: none;
+      font-size: 0.82rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .btn-github:hover { border-color: var(--accent); }
+
+    .doc-layout {
+      margin-top: 60px;
+      display: flex;
+      width: 100vw;
+      height: calc(100vh - 60px);
+    }
+
+    aside {
+      width: var(--sidebar-width);
+      background: var(--panel);
+      border-right: 1px solid var(--border);
+      padding: 20px 16px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .menu-group-title {
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      margin-bottom: 8px;
+    }
+    .menu-item {
+      display: block;
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 0.85rem;
+      padding: 6px 10px;
+      border-radius: 4px;
+      transition: all 0.15s;
+    }
+    .menu-item:hover, .menu-item.active {
+      background: rgba(56, 189, 248, 0.1);
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    main {
+      flex: 1;
+      padding: 40px 60px;
+      overflow-y: auto;
+      max-width: 1100px;
+    }
+
+    h1 { font-size: 2.2rem; font-weight: 800; margin-bottom: 12px; letter-spacing: -0.5px; }
+    h2 { font-size: 1.5rem; font-weight: 700; margin-top: 36px; margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+    h3 { font-size: 1.15rem; font-weight: 600; margin-top: 24px; margin-bottom: 10px; color: var(--accent); }
+    p { font-size: 0.95rem; line-height: 1.65; color: var(--text-muted); margin-bottom: 16px; }
+
+    pre {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 16px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.85rem;
+      overflow-x: auto;
+      margin-bottom: 20px;
+      line-height: 1.5;
+    }
+    code {
+      font-family: 'JetBrains Mono', monospace;
+      background: rgba(56, 189, 248, 0.1);
+      color: var(--accent);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.85rem;
+    }
+    pre code { background: none; color: inherit; padding: 0; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 24px;
+      font-size: 0.88rem;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 10px 14px;
+      text-align: left;
+    }
+    th { background: var(--card-bg); color: var(--accent); font-weight: 600; }
+
+    .callout {
+      background: rgba(56, 189, 248, 0.08);
+      border-left: 4px solid var(--accent);
+      padding: 14px 18px;
+      border-radius: 4px;
+      margin-bottom: 24px;
+      font-size: 0.9rem;
+    }
+
+    svg.icon { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <a href="#" class="logo">
+      <svg class="icon" style="width:20px; height:20px; stroke: var(--accent);" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+      api-quick
+      <span class="badge">v1.0.0 Docs</span>
+    </a>
+    <div class="nav-links">
+      <a href="https://www.npmjs.com/package/@skjuve/api-quick" target="_blank" class="nav-link">NPM Registry</a>
+      <a href="https://github.com/SKJUV/api-quick" target="_blank" class="btn-github">
+        <svg class="icon" viewBox="0 0 24 24"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path></svg>
+        GitHub Repository
+      </a>
+    </div>
+  </header>
+
+  <div class="doc-layout">
+    <aside>
+      <div>
+        <div class="menu-group-title">Getting Started</div>
+        <a href="#overview" class="menu-item active">Overview & Vision</a>
+        <a href="#installation" class="menu-item">Installation Guide</a>
+        <a href="#quickstart" class="menu-item">Quick Start Commands</a>
+      </div>
+
+      <div>
+        <div class="menu-group-title">Core Engines</div>
+        <a href="#ast-sniffer" class="menu-item">Polyglot AST Sniffer</a>
+        <a href="#e2e-workflow" class="menu-item">E2E Workflow Chaining</a>
+        <a href="#load-benchmark" class="menu-item">Load Benchmark Engine</a>
+        <a href="#mock-server" class="menu-item">Zero-Latency Mock Server</a>
+        <a href="#json-diff" class="menu-item">Structural JSON Diff</a>
+      </div>
+
+      <div>
+        <div class="menu-group-title">Interfaces & CI/CD</div>
+        <a href="#web-workbench" class="menu-item">Web GUI Workbench</a>
+        <a href="#transpiler" class="menu-item">Code Transpiler (--to)</a>
+        <a href="#ci-assertions" class="menu-item">CI/CD Assertions</a>
+      </div>
+    </aside>
+
+    <main>
+      <section id="overview">
+        <h1>api-quick Documentation</h1>
+        <p><strong>api-quick</strong> is a high-performance, multi-interface HTTP engine, static code analysis sniffer, and API workbench designed for modern software engineers and CI/CD pipelines.</p>
+        
+        <div class="callout">
+          <strong>Core Vision:</strong> Bridge the gap between ultra-fast terminal execution (cURL speed) and visual interactive workbenches (Postman / Insomnia) without compromising memory footprint or security.
+        </div>
+      </section>
+
+      <section id="installation">
+        <h2>Installation Guide</h2>
+        <p>Install <code>@skjuve/api-quick</code> globally via NPM or execute instantly via NPX:</p>
+
+        <h3>Global Installation (Recommended)</h3>
+        <pre><code>npm install -g @skjuve/api-quick</code></pre>
+
+        <h3>Instant Zero-Installation Execution</h3>
+        <pre><code>npx @skjuve/api-quick web</code></pre>
+      </section>
+
+      <section id="quickstart">
+        <h2>Quick Start Commands</h2>
+        
+        <table>
+          <thead>
+            <tr>
+              <th>Command</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>api-quick web [--port 4000]</code></td>
+              <td>Launch Web UI Workbench with CORS bypass proxy</td>
+            </tr>
+            <tr>
+              <td><code>api-quick tui</code></td>
+              <td>Launch full interactive Terminal UI workbench</td>
+            </tr>
+            <tr>
+              <td><code>api-quick sniff [dir]</code></td>
+              <td>Scan local source code AST for API routes</td>
+            </tr>
+            <tr>
+              <td><code>api-quick bench &lt;url&gt; -n 100 -c 10</code></td>
+              <td>Run high-throughput HTTP load benchmark</td>
+            </tr>
+            <tr>
+              <td><code>api-quick mock [--port 8080]</code></td>
+              <td>Launch zero-latency AST mock API server</td>
+            </tr>
+            <tr>
+              <td><code>api-quick diff &lt;url1&gt; &lt;url2&gt;</code></td>
+              <td>Visual structural JSON diffing engine</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="ast-sniffer">
+        <h2>Polyglot AST Route Sniffer</h2>
+        <p><code>api-quick</code> inspects local backend source code statically (without running the application) to discover API routes across 8 major frameworks:</p>
+        <ul>
+          <li><strong>Express.js / Node.js</strong> (app.get, router.post, module mount prefixes)</li>
+          <li><strong>NestJS</strong> (@Get, @Post, @Controller)</li>
+          <li><strong>Next.js</strong> (App & Pages Router)</li>
+          <li><strong>FastAPI & Flask (Python)</strong></li>
+          <li><strong>Django REST Framework</strong></li>
+          <li><strong>Go Gin / Fiber</strong></li>
+          <li><strong>Spring Boot (Java/Kotlin)</strong></li>
+          <li><strong>Laravel (PHP)</strong></li>
+        </ul>
+        <pre><code>api-quick sniff</code></pre>
+      </section>
+
+      <section id="e2e-workflow">
+        <h2>E2E Workflow Chaining Engine</h2>
+        <p>Run automated multi-step request sequences with automatic JWT Bearer token capture and variable propagation across dependent steps.</p>
+      </section>
+
+      <section id="load-benchmark">
+        <h2>High-Throughput Load Benchmark Engine</h2>
+        <p>Simulate concurrent HTTP worker pools directly from CLI or Web UI to measure requests per second and latency percentiles (p50, p95, p99).</p>
+        <pre><code>api-quick bench http://localhost:4000/api/v1/auth/me -n 500 -c 20</code></pre>
+      </section>
+
+      <section id="mock-server">
+        <h2>Zero-Latency Mock Server</h2>
+        <p>Start a virtual Hono API mock server on port 8080 responding to all sniffed AST routes with structured mock JSON data.</p>
+        <pre><code>api-quick mock --port 8080</code></pre>
+      </section>
+
+      <section id="json-diff">
+        <h2>Structural JSON Diff Engine</h2>
+        <p>Compare JSON response structures recursively between local and staging/production environments to detect breaking API changes.</p>
+        <pre><code>api-quick diff http://localhost:4000/api/v1/products https://staging.api.com/v1/products</code></pre>
+      </section>
+
+      <section id="transpiler">
+        <h2>Code Transpiler (--to)</h2>
+        <p>Transpile live CLI requests into production-ready code in 8 languages:</p>
+        <pre><code>api-quick POST https://api.stripe.com/v1/charges amount=2000 --to python</code></pre>
+      </section>
+
+      <section id="ci-assertions">
+        <h2>CI/CD Assertion DSL</h2>
+        <p>Run zero-dependency automated API assertions in GitHub Actions pipelines with POSIX exit code alignment:</p>
+        <pre><code>api-quick GET https://api.example.com/health \
+  --expect-status 200 \
+  --expect-max-time 150ms \
+  --expect-json "$.status" = "OK"</code></pre>
+      </section>
+
+    </main>
+  </div>
+
+</body>
+</html>
