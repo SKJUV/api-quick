@@ -30,7 +30,7 @@ async function main() {
 
   if (rawArgs.length === 0 || rawArgs.includes("--help") || rawArgs.includes("-h")) {
     console.log(`
-\x1b[1m\x1b[36m⚡ api-quick\x1b[0m - \x1b[90mHigh-Performance Multi-Interface HTTP Engine & API Workbench\x1b[0m
+\x1b[1m\x1b[36mapi-quick\x1b[0m - \x1b[90mHigh-Performance Multi-Interface HTTP Engine & API Workbench\x1b[0m
 
 \x1b[1mUSAGE:\x1b[0m
   api-quick [METHOD] <URL> [headers...] [params/body...] [options...]
@@ -38,7 +38,7 @@ async function main() {
 
 \x1b[1mCOMMANDS:\x1b[0m
   \x1b[33mtui\x1b[0m                     Launch full interactive Terminal UI workbench
-  \x1b[33mweb\x1b[0m [--port 4000]       Launch React Web UI with CORS bypass proxy
+  \x1b[33mweb\x1b[0m [--port 4000]       Launch Web UI with CORS bypass proxy
   \x1b[33mmock\x1b[0m [--port 8080]      Launch zero-latency local AST mock API server
   \x1b[33mdiff\x1b[0m <url1> <url2>      Visual structural JSON diffing engine
   \x1b[33msniff\x1b[0m [dir]             Scan local source code AST for API routes
@@ -88,12 +88,12 @@ async function main() {
     const availablePort = await findAvailablePort(requestedPort);
 
     if (availablePort !== requestedPort) {
-      console.log(`\x1b[33m⚠️ Port ${requestedPort} is already in use. Automatically switching to port ${availablePort}...\x1b[0m`);
+      console.log(`\x1b[33m[Warning] Port ${requestedPort} is in use. Automatically switching to port ${availablePort}...\x1b[0m`);
     }
 
     const app = createWebServer(availablePort);
-    console.log(`\n\x1b[1m\x1b[36m⚡ Launching api-quick Web Workbench & CORS Proxy Server...\x1b[0m`);
-    console.log(`\x1b[32m✔ Server running at:\x1b[0m \x1b[1mhttp://localhost:${availablePort}\x1b[0m`);
+    console.log(`\n\x1b[1m\x1b[36m[Server] Launching api-quick Web Workbench & CORS Proxy Server...\x1b[0m`);
+    console.log(`\x1b[32m[Success] Server running at:\x1b[0m \x1b[1mhttp://localhost:${availablePort}\x1b[0m`);
     console.log(`\x1b[90m(Press Ctrl+C to stop)\x1b[0m\n`);
 
     serve({
@@ -110,14 +110,14 @@ async function main() {
       mockPort = parseInt(rawArgs[portIdx + 1], 10);
     }
 
-    console.log(`\n\x1b[1m\x1b[33m⚡ Launching api-quick Zero-Latency AST Mock Server on http://localhost:${mockPort}...\x1b[0m`);
+    console.log(`\n\x1b[1m\x1b[33m[Mock Server] Launching api-quick Zero-Latency AST Mock Server on http://localhost:${mockPort}...\x1b[0m`);
     createMockServer(mockPort);
     return;
   }
 
   if (firstCommand === "sniff") {
     const targetDir = rawArgs[1] || process.cwd();
-    console.log(`\n\x1b[1m\x1b[32m⚡ Scanning AST Routes in ${targetDir}...\x1b[0m\n`);
+    console.log(`\n\x1b[1m\x1b[32m[AST Sniffer] Scanning routes in ${targetDir}...\x1b[0m\n`);
     const routes = sniffProjectRoutes(targetDir);
 
     if (routes.length === 0) {
@@ -150,7 +150,7 @@ async function main() {
     const cIdx = rawArgs.indexOf("-c");
     if (cIdx !== -1 && rawArgs[cIdx + 1]) concurrency = parseInt(rawArgs[cIdx + 1], 10);
 
-    console.log(`\n\x1b[1m\x1b[31m⚡ Running High-Throughput Load Benchmark on ${url} (${totalRequests} requests, ${concurrency} workers)...\x1b[0m\n`);
+    console.log(`\n\x1b[1m\x1b[31m[Benchmark] Running High-Throughput Load Benchmark on ${url} (${totalRequests} requests, ${concurrency} workers)...\x1b[0m\n`);
     
     const benchEngine = new BenchmarkEngine();
     const result = await benchEngine.runBenchmark({
@@ -159,7 +159,7 @@ async function main() {
       concurrency
     });
 
-    console.log(`\x1b[1m\x1b[32m✔ BENCHMARK COMPLETE:\x1b[0m`);
+    console.log(`\x1b[1m\x1b[32m[Benchmark Complete]\x1b[0m`);
     console.log(`  Requests Per Second : \x1b[1m\x1b[33m${result.requestsPerSecond} req/s\x1b[0m`);
     console.log(`  Total Duration      : ${result.totalDurationMs} ms`);
     console.log(`  Successful / Failed : \x1b[32m${result.successCount}\x1b[0m / \x1b[31m${result.failureCount}\x1b[0m`);
@@ -177,7 +177,7 @@ async function main() {
       process.exit(1);
     }
 
-    console.log(`\n\x1b[1m\x1b[35m⚡ Structural JSON Diffing Engine: Comparing ${url1} vs ${url2}...\x1b[0m\n`);
+    console.log(`\n\x1b[1m\x1b[35m[JSON Diff] Comparing ${url1} vs ${url2}...\x1b[0m\n`);
     
     const httpEngine = new CoreHttpEngine();
     try {
@@ -192,7 +192,7 @@ async function main() {
       const diff = compareJsonStructures(json1, json2);
 
       if (diff.isIdentical) {
-        console.log(`\x1b[32m✔ Structures are 100% identical!\x1b[0m\n`);
+        console.log(`\x1b[32m[Success] Structures are 100% identical!\x1b[0m\n`);
       } else {
         if (diff.addedKeys.length > 0) {
           console.log(`\x1b[32m+ Added Keys in URL 2:\x1b[0m`, diff.addedKeys);

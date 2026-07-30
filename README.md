@@ -1,51 +1,48 @@
-# ⚡ api-quick
+# api-quick
 
-> **High-Performance Multi-Interface HTTP Engine, Automation & API Workbench**
-> *CLI / Interactive TUI / React Web Workbench / Headless CI Automation*
+> **High-Performance Multi-Interface HTTP Engine, Automation & API Workbench**  
+> *CLI / Interactive TUI / Web Workbench / Headless CI Automation*
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)]()
-[![Bun Compatibility](https://img.shields.io/badge/Bun-1.0+-black?logo=bun)]()
 [![Node Compatibility](https://img.shields.io/badge/Node-v20+-green?logo=node.js)]()
 
 `api-quick` is a zero-latency, polyglot API workbench designed for modern developers and high-throughput CI/CD pipelines. It bridges the gap between ultra-fast terminal execution (`curl` / `httpie` speed) and visual interactive workbenches (`Postman` / `Insomnia`), without compromising memory footprint or security.
 
 ---
 
-## 🔬 Key Architectural Highlights
+## Architectural Highlights
 
-- **⚡ Sub-10ms Cold Start**: Instant CLI execution powered by optimized runtime bootstrapping.
-- **🔒 Hardware-Backed Zero-Latency Storage**: Encrypted token & session persistence (`AES-256-GCM` + OS Keychain / Argon2id fallback + SQLite WAL).
-- **🚀 Polyglot Route Sniffing**: Automatic static endpoint discovery from your local source code (`Express`, `NestJS`, `FastAPI`, `Go Gin`).
-- **🌐 Dual Execution Engine**: Runs natively via Bun or seamlessly falls back to Node.js / Undici.
-- **📊 Declarative CI DSL**: Built-in JSONPath & EBNF assertion engine with strict POSIX exit code alignment for automated testing.
-- **🔄 Universal Polyglot Exporter**: Transpile CLI invocations into production-ready code in 8 languages (`curl`, `TypeScript`, `Python`, `Go`, `Rust`, `Java`, `C#`, `PHP`).
-- **🎨 Modern Interactive Interfaces**: Rich ANSI streaming CLI, interactive TUI terminal mode, and lightweight React/Vite local Web UI with zero-CORS proxying.
+- **Sub-10ms Cold Start**: Instant CLI execution powered by optimized runtime bootstrapping.
+- **Polyglot AST Route Sniffing**: Automatic static endpoint discovery from your local source code (`Express`, `NestJS`, `Next.js`, `FastAPI`, `Flask`, `Django`, `Go`, `Spring Boot`, `Laravel`).
+- **OpenAPI 3.0 Generation**: Automatic Swagger-style documentation and specification export (`/api/openapi.json`).
+- **E2E Workflow Runner**: Multi-step request chaining with automatic JWT token extraction and variable propagation.
+- **High-Throughput Load Benchmark**: Concurrent HTTP load testing engine computing p50, p95, and p99 latency percentiles.
+- **Zero-Latency Mock API Server**: Instant local mock server (`api-quick mock`) serving structured payloads.
+- **Structural JSON Diff Engine**: Visual structural diffing (`api-quick diff`) comparing keys across environments.
+- **Declarative CI Assertions**: Built-in JSONPath assertion engine with POSIX exit code alignment for automated testing.
+- **Universal Polyglot Exporter**: Transpile requests into production code in 8 languages (`curl`, `TypeScript`, `Python`, `Go`, `Rust`, `Java`, `C#`, `PHP`).
+- **Web Workbench with CORS Bypass Proxy**: Responsive Web UI featuring Theme Switcher (Dark / Light / OLED), security level filtering, and execution telemetry logs.
 
 ---
 
-## 📦 Installation
-
-### Via Universal Install Script (Recommended)
-```bash
-curl -fsSL https://raw.githubusercontent.com/SKJUV/api-quick/main/install.sh | sh
-```
+## Installation
 
 ### Via NPM
 ```bash
-npm install -g api-quick
+npm install -g .
 ```
 
-### Via Bun
+### Direct Execution via NPX
 ```bash
-bun install -g api-quick
+npx api-quick --help
 ```
 
 ---
 
-## 🚀 Quick Start
+## Quick Start & Usage
 
-### 1. Simple HTTP Requests
+### 1. HTTP Request Execution
 ```bash
 # GET Request with auto-formatted JSON streaming
 api-quick GET https://api.github.com/repos/SKJUV/api-quick
@@ -53,17 +50,17 @@ api-quick GET https://api.github.com/repos/SKJUV/api-quick
 # POST Request with form-encoded payload
 api-quick POST https://api.stripe.com/v1/charges amount=2000 currency=usd
 
-# POST Request with raw JSON payload
+# POST Request with JSON payload
 api-quick POST https://api.example.com/users name:="Alice" role:="ADMIN"
 ```
 
-### 2. Polyglot Code Transpilation (`--to`)
+### 2. Code Transpilation (`--to`)
 Convert any live CLI request directly into production code:
 ```bash
 api-quick POST https://api.stripe.com/v1/charges amount=2000 --to python
 ```
 
-*Generated output:*
+*Output:*
 ```python
 import requests
 
@@ -79,51 +76,48 @@ print(response.json())
 ### 3. CI/CD Assertion Engine (`--expect-*`)
 Run zero-dependency automated API tests in CI pipelines:
 ```bash
-api-quick GET https://api.staging.example.com/health \
+api-quick GET https://api.example.com/health \
   --expect-status 200 \
   --expect-max-time 150ms \
   --expect-json "$.status" = "OK"
 ```
 
-### 4. Interactive Terminal UI (TUI)
-Simply type `api-quick` without arguments to launch the full zero-flicker TUI workbench:
-```bash
-api-quick
-```
+### 4. Direct CLI Commands
 
-### 5. Local Web UI & Proxy Server
-Launch the companion React Web UI with local CORS-bypass proxy:
-```bash
-api-quick web --port 4000
-```
+| Command | Description |
+| :--- | :--- |
+| `api-quick web [--port 4000]` | Launch Web UI Workbench with CORS bypass proxy |
+| `api-quick tui` | Launch interactive Terminal UI workbench |
+| `api-quick sniff [dir]` | Scan local source code AST for API routes |
+| `api-quick bench <url> -n 100 -c 10` | Run high-throughput HTTP load benchmark |
+| `api-quick mock [--port 8080]` | Launch zero-latency AST mock API server |
+| `api-quick diff <url1> <url2>` | Visual structural JSON diffing engine |
 
 ---
 
-## 🛠️ Monorepo Structure
+## Directory Structure
 
 ```
 api-quick/
-├── .github/              # CI/CD Workflows & Issue Templates
-├── bin/                  # Global Executable Wrappers
-├── src/                  # Core TypeScript / Bun Source Code
+├── bin/                  # Global CLI Executable Wrappers
+├── src/                  # Core TypeScript Source Code
 │   ├── cli/              # Argument Parsing, ANSI Formatter, TUI, Assertions
-│   ├── core/             # HTTP Engine, Crypto, SQLite WAL, OpenAPI, AST Sniffer
-│   ├── server/           # CORS Bypass Proxy (Hono) & WS IPC Server
-│   └── types/            # Strict TypeScript Interfaces
-├── web/                  # Vite + React + Tailwind CSS Web UI
-├── tests/                # Unit, Integration & E2E Test Suite
+│   ├── core/             # HTTP Engine, AST Sniffer, Workflows, Benchmark, Mock, Diff
+│   ├── server/           # CORS Bypass Proxy (Hono) & Web UI Server
+│   └── types/            # TypeScript Interface Definitions
+├── tests/                # Unit & Integration Test Suite
 ├── LICENSE               # MIT License
 └── package.json          # Monorepo Configuration
 ```
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
-We welcome contributions of all kinds! Please review our [Contributing Guidelines](CONTRIBUTING.md) and [Code of Conduct](CODE_OF_CONDUCT.md) before getting started.
+Contributions of all kinds are welcome! Please review our [Contributing Guidelines](CONTRIBUTING.md) and [Code of Conduct](CODE_OF_CONDUCT.md) before submitting pull requests.
 
 ---
 
-## 📜 License
+## License
 
 Distributed under the **MIT License**. See [`LICENSE`](LICENSE) for more details.
