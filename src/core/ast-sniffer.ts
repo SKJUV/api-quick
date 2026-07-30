@@ -70,15 +70,9 @@ export function sniffProjectRoutes(targetDir: string = process.cwd()): Discovere
       const lines = content.split("\n");
       const relPath = path.relative(targetDir, file);
 
-      // Detect specific file-level router mount prefix (e.g. router in auth.routes.js mounted at /api/v1/auth)
-      let fileRouterPrefix = "";
-      const filename = path.basename(file, path.extname(file)).replace(/\.(routes|controller|route)$/, "");
-      
-      // Matches file name to mount prefix if applicable
-      const matchingMount = detectedMountPrefixes.find(p => p.includes(filename) || p.endsWith(filename));
-      if (matchingMount) {
-        fileRouterPrefix = matchingMount;
-      }
+      // Infer route prefix from filename (e.g. admin.routes.js -> /admin or /api/v1/admin or /api/admin)
+      const baseFilename = path.basename(file, path.extname(file)).replace(/\.(routes|route|controller)$/, "");
+      const routeModuleName = baseFilename !== "index" && baseFilename !== "app" && baseFilename !== "server" ? baseFilename : "";
 
       // -------------------------------------------------------------
       // 1. NESTJS DECORATOR DETECTION (@Controller + @Get/@Post/...)
@@ -162,33 +156,56 @@ export function sniffProjectRoutes(targetDir: string = process.cwd()): Discovere
         // Express / Fastify / Hono: app.get("/path"), router.post("/path")
         const expressMatch = lineText.match(/(?:app|router|server|instance|hono)\.(get|post|put|delete|patch|all)\s*\(\s*["']([^"']+)["']/i);
         if (expressMatch) {
-          let routePath = expressMatch[2];
-          if (!routePath.startsWith("/")) routePath = "/" + routePath;
+          let rawPath = expressMatch[2];
+          if (!rawPath.startsWith("/")) rawPath = "/" + rawPath;
+          const method = expressMatch[1].toUpperCase() === "ALL" ? "GET" : expressMatch[1].toUpperCase();
 
-          // If router mount prefix was detected (e.g. /api or /api/v1), combine it!
-          if (detectedMountPrefixes.length > 0 && !detectedMountPrefixes.some(p => routePath.startsWith(p))) {
-            const primaryMount = detectedMountPrefixes[0];
-            const prefixedPath = (primaryMount.endsWith("/") ? primaryMount.slice(0, -1) : primaryMount) + routePath;
+          // 1. Module name prefixed path (e.g. admin.routes.js + /dashboard -> /admin/dashboard, /api/admin/dashboard, /api/v1/admin/dashboard)
+          if (routeModuleName && !rawPath.startsWith("/" + routeModuleName)) {
+            const modulePath = "/" + routeModuleName + (rawPath === "/" ? "" : rawPath);
             
+            // Candidate A: /api/v1/module/path
             routes.push({
               id: `route-${idCounter++}`,
-              method: expressMatch[1].toUpperCase() === "ALL" ? "GET" : expressMatch[1].toUpperCase(),
-              path: prefixedPath,
+              method,
+              path: `/api/v1${modulePath}`,
               file: relPath,
               line: lineNum,
               framework: "Express/Fastify",
-              suggestedBody: ["POST", "PUT", "PATCH"].includes(expressMatch[1].toUpperCase()) ? { sample_field: "test_value" } : undefined
+              suggestedBody: ["POST", "PUT", "PATCH"].includes(method) ? { sample_field: "test_value" } : undefined
+            });
+
+            // Candidate B: /api/module/path
+            routes.push({
+              id: `route-${idCounter++}`,
+              method,
+              path: `/api${modulePath}`,
+              file: relPath,
+              line: lineNum,
+              framework: "Express/Fastify",
+              suggestedBody: ["POST", "PUT", "PATCH"].includes(method) ? { sample_field: "test_value" } : undefined
+            });
+
+            // Candidate C: /module/path
+            routes.push({
+              id: `route-${idCounter++}`,
+              method,
+              path: modulePath,
+              file: relPath,
+              line: lineNum,
+              framework: "Express/Fastify"
             });
           }
 
+          // 2. Direct path
           routes.push({
             id: `route-${idCounter++}`,
-            method: expressMatch[1].toUpperCase() === "ALL" ? "GET" : expressMatch[1].toUpperCase(),
-            path: routePath,
+            method,
+            path: rawPath,
             file: relPath,
             line: lineNum,
             framework: "Express/Fastify",
-            suggestedBody: ["POST", "PUT", "PATCH"].includes(expressMatch[1].toUpperCase()) ? { sample_field: "test_value" } : undefined
+            suggestedBody: ["POST", "PUT", "PATCH"].includes(method) ? { sample_field: "test_value" } : undefined
           });
           return;
         }
