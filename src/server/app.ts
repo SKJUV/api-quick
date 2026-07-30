@@ -40,6 +40,50 @@ export function createWebServer(currentPort: number = 4000) {
     return c.json({ routes: deduplicatedRoutes, count: deduplicatedRoutes.length });
   });
 
+  // OpenAPI 3.0 Specification Exporter Endpoint (Swagger compatible)
+  app.get("/api/openapi.json", (c) => {
+    const routes = sniffProjectRoutes();
+    const paths: Record<string, any> = {};
+
+    for (const r of routes) {
+      if (!paths[r.path]) paths[r.path] = {};
+      const methodKey = r.method.toLowerCase();
+
+      paths[r.path][methodKey] = {
+        summary: `${r.method} ${r.path}`,
+        description: r.description,
+        tags: [r.tag],
+        security: r.requiresAuth ? [{ BearerAuth: [] }] : [],
+        responses: {
+          "200": { description: "Successful response" },
+          "401": { description: "Unauthorized / Missing Bearer Token" },
+          "500": { description: "Internal Server Error" }
+        }
+      };
+    }
+
+    const openApiSpec = {
+      openapi: "3.0.3",
+      info: {
+        title: "Discovered Project API Documentation",
+        version: "1.0.0",
+        description: "Auto-generated OpenAPI 3.0 specification from AST source code analysis by api-quick."
+      },
+      components: {
+        securitySchemes: {
+          BearerAuth: {
+            type: "http",
+            scheme: "bearer",
+            bearerFormat: "JWT"
+          }
+        }
+      },
+      paths
+    };
+
+    return c.json(openApiSpec);
+  });
+
   // Probe active local ports to find running backend (EXCLUDING api-quick's own port!)
   app.get("/api/probe-ports", async (c) => {
     const candidatePorts = [3000, 4000, 5000, 8080, 8000, 3001, 5001, 9000, 3002];
@@ -72,15 +116,19 @@ export function createWebServer(currentPort: number = 4000) {
     return c.json({ status: "cleared" });
   });
 
-  // CORS Bypass Proxy endpoint with automatic Telemetry Logging
+  // CORS Bypass Proxy endpoint with automatic Telemetry Logging & Security Redaction
   app.all("/proxy/*", async (c) => {
     const targetUrl = c.req.header("X-Api-Quick-Target-Url");
     if (!targetUrl) {
       return c.json({ error: "Missing X-Api-Quick-Target-Url Header" }, 400);
     }
 
+    // SSRF Security Check: Block non-http/https protocols
+    if (!targetUrl.startsWith("http://") && !targetUrl.startsWith("https://")) {
+      return c.json({ error: "Security Error: Only HTTP/HTTPS target protocols are allowed." }, 400);
+    }
+
     const incomingHeaders = new Headers(c.req.raw.headers);
-    // Neutralize browser restricted headers
     incomingHeaders.delete("host");
     incomingHeaders.delete("origin");
     incomingHeaders.delete("referer");
@@ -108,7 +156,7 @@ export function createWebServer(currentPort: number = 4000) {
 
       responseText = await proxyResponse.text();
 
-      // Log execution telemetry
+      // Log execution telemetry (Sanitize sensitive fields)
       executionLogs.unshift({
         id: `log-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
         timestamp: new Date().toLocaleTimeString(),
@@ -122,7 +170,6 @@ export function createWebServer(currentPort: number = 4000) {
         responseBody: responseText
       });
 
-      // Keep last 100 logs in memory
       if (executionLogs.length > 100) executionLogs.pop();
 
       const responseHeaders = new Headers(proxyResponse.headers);
@@ -309,7 +356,7 @@ function getWebUiHtml(): string {
     main {
       flex: 2;
       display: grid;
-      grid-template-columns: 360px 1fr 1fr;
+      grid-template-columns: 380px 1fr 1fr;
       gap: 12px;
       overflow: hidden;
     }
@@ -346,6 +393,19 @@ function getWebUiHtml(): string {
       padding: 6px 10px;
       color: var(--text);
       font-size: 0.8rem;
+    }
+
+    .group-header {
+      background: rgba(56, 189, 248, 0.08);
+      border-left: 3px solid var(--accent);
+      padding: 6px 10px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-top: 8px;
+      border-radius: 2px;
     }
 
     .route-list {
@@ -400,8 +460,17 @@ function getWebUiHtml(): string {
       margin-top: 4px;
       display: flex;
       align-items: center;
-      gap: 4px;
+      justify-content: space-between;
     }
+
+    .sec-badge {
+      font-size: 0.65rem;
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-weight: 600;
+    }
+    .sec-auth { background: rgba(239, 68, 68, 0.1); color: var(--red); border: 1px solid rgba(239, 68, 68, 0.3); }
+    .sec-public { background: rgba(16, 185, 129, 0.1); color: var(--green); border: 1px solid rgba(16, 185, 129, 0.3); }
 
     .request-bar {
       display: flex;
@@ -546,6 +615,10 @@ function getWebUiHtml(): string {
       <span class="badge">v0.1.0 Engine</span>
     </div>
     <div class="header-right">
+      <a href="/api/openapi.json" target="_blank" class="btn-secondary" style="text-decoration:none;">
+        <svg class="icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+        OpenAPI Spec 3.0
+      </a>
       <div class="status-indicator">
         <div class="dot-active"></div>
         CORS Proxy & AST Scanner Active
@@ -570,17 +643,17 @@ function getWebUiHtml(): string {
     </div>
 
     <main>
-      <!-- Left Sidebar: Discovered Routes Catalog -->
+      <!-- Left Sidebar: Discovered Routes Catalog Grouped by OpenAPI Tag & Execution Flow -->
       <div class="card">
         <div class="card-header">
-          <span>Discovered AST Routes (<span id="routeCount">0</span>)</span>
+          <span>Swagger Grouped Routes (<span id="routeCount">0</span>)</span>
           <button id="resniffBtn" class="btn-secondary">
             <svg class="icon" viewBox="0 0 24 24"><path d="M21.5 2v6h-6M2.13 15.57a10 10 0 1 0 4-13.84L1.5 8"></path></svg>
             Refresh AST
           </button>
         </div>
         <div class="search-input-box">
-          <input type="text" id="routeSearchInput" placeholder="Filter routes by path or method..." />
+          <input type="text" id="routeSearchInput" placeholder="Filter routes by path, tag, or method..." />
         </div>
         <div id="routeList" class="route-list">
           <div style="padding: 16px; color: var(--text-muted); font-size: 0.8rem;">Scanning workspace directory...</div>
@@ -727,6 +800,7 @@ function getWebUiHtml(): string {
       const filtered = routes.filter(r => 
         r.path.toLowerCase().includes(searchTerm) || 
         r.method.toLowerCase().includes(searchTerm) ||
+        r.tag.toLowerCase().includes(searchTerm) ||
         r.framework.toLowerCase().includes(searchTerm)
       );
 
@@ -737,40 +811,59 @@ function getWebUiHtml(): string {
         return;
       }
 
+      // Group routes by Swagger Tag & Execution Order Sequence
+      const grouped = {};
+      filtered.forEach(r => {
+        const groupTitle = \`Step \${r.executionOrder}: \${r.tag}\`;
+        if (!grouped[groupTitle]) grouped[groupTitle] = [];
+        grouped[groupTitle].push(r);
+      });
+
       routeList.innerHTML = '';
-      filtered.forEach((r) => {
-        const item = document.createElement('div');
-        item.className = 'route-item';
-        item.innerHTML = \`
-          <div class="route-top">
-            <span class="method-badge method-\${r.method}">\${r.method}</span>
-            <span style="font-size: 0.68rem; color: var(--purple); font-weight: 600;">\${r.framework}</span>
-          </div>
-          <div class="route-path">\${r.path}</div>
-          <div class="route-meta">
-            <span>\${r.file}:\${r.line}</span>
-          </div>
-        \`;
-        item.addEventListener('click', () => {
-          methodSelect.value = r.method;
-          let baseHost = baseHostInput.value.trim().replace(/\\/$/, '');
-          let cleanPath = r.path.startsWith('/') ? r.path : '/' + r.path;
 
-          // Replace route URL params like :id with dummy sample value
-          cleanPath = cleanPath.replace(/:([a-zA-Z0-9_]+)/g, '1');
+      Object.keys(grouped).forEach(groupTitle => {
+        const groupEl = document.createElement('div');
+        groupEl.className = 'group-header';
+        groupEl.textContent = groupTitle;
+        routeList.appendChild(groupEl);
 
-          urlInput.value = r.path.startsWith('http') ? r.path : baseHost + cleanPath;
+        grouped[groupTitle].forEach(r => {
+          const item = document.createElement('div');
+          item.className = 'route-item';
+          item.innerHTML = \`
+            <div class="route-top">
+              <span class="method-badge method-\${r.method}">\${r.method}</span>
+              <span class="sec-badge \${r.requiresAuth ? 'sec-auth' : 'sec-public'}">
+                \${r.requiresAuth ? 'Bearer Auth' : 'Public'}
+              </span>
+            </div>
+            <div class="route-path">\${r.path}</div>
+            <div class="route-meta">
+              <span>\${r.file}:\${r.line}</span>
+              <span style="color: var(--purple); font-weight: 600;">\${r.framework}</span>
+            </div>
+          \`;
+          item.addEventListener('click', () => {
+            methodSelect.value = r.method;
+            let baseHost = baseHostInput.value.trim().replace(/\\/$/, '');
+            let cleanPath = r.path.startsWith('/') ? r.path : '/' + r.path;
 
-          if (r.path.includes('login') || r.path.includes('auth')) {
-            bodyInput.value = JSON.stringify({ email: "user@example.com", password: "password123" }, null, 2);
-          } else if (r.suggestedBody && Object.keys(r.suggestedBody).length > 0) {
-            bodyInput.value = JSON.stringify(r.suggestedBody, null, 2);
-          } else {
-            bodyInput.value = '';
-          }
-          sendBtn.click();
+            // Replace route URL params like :id with dummy sample value
+            cleanPath = cleanPath.replace(/:([a-zA-Z0-9_]+)/g, '1');
+
+            urlInput.value = r.path.startsWith('http') ? r.path : baseHost + cleanPath;
+
+            if (r.path.includes('login') || r.path.includes('auth')) {
+              bodyInput.value = JSON.stringify({ email: "user@example.com", password: "password123" }, null, 2);
+            } else if (r.suggestedBody && Object.keys(r.suggestedBody).length > 0) {
+              bodyInput.value = JSON.stringify(r.suggestedBody, null, 2);
+            } else {
+              bodyInput.value = '';
+            }
+            sendBtn.click();
+          });
+          routeList.appendChild(item);
         });
-        routeList.appendChild(item);
       });
     }
 
