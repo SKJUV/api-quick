@@ -40,6 +40,28 @@ export function sniffProjectRoutes(targetDir: string = process.cwd()): Discovere
 
   collectFiles(targetDir);
 
+  // -------------------------------------------------------------
+  // STEP 0: Detect Global Express / App router mount prefixes (e.g. app.use('/api', ...), app.use('/api/v1', ...))
+  // -------------------------------------------------------------
+  const detectedMountPrefixes: string[] = [];
+
+  for (const file of filesToScan) {
+    if (/(app|server|index|main|routes)\.(ts|js)$/.test(file)) {
+      try {
+        const content = fs.readFileSync(file, "utf-8");
+        const matches = content.matchAll(/(?:app|router|server)\.use\s*\(\s*["']([^"']+)["']/gi);
+        for (const match of matches) {
+          const mount = match[1].trim();
+          if (mount && mount !== "/" && mount.startsWith("/")) {
+            if (!detectedMountPrefixes.includes(mount)) {
+              detectedMountPrefixes.push(mount);
+            }
+          }
+        }
+      } catch {}
+    }
+  }
+
   let idCounter = 1;
 
   for (const file of filesToScan) {
@@ -47,6 +69,16 @@ export function sniffProjectRoutes(targetDir: string = process.cwd()): Discovere
       const content = fs.readFileSync(file, "utf-8");
       const lines = content.split("\n");
       const relPath = path.relative(targetDir, file);
+
+      // Detect specific file-level router mount prefix (e.g. router in auth.routes.js mounted at /api/v1/auth)
+      let fileRouterPrefix = "";
+      const filename = path.basename(file, path.extname(file)).replace(/\.(routes|controller|route)$/, "");
+      
+      // Matches file name to mount prefix if applicable
+      const matchingMount = detectedMountPrefixes.find(p => p.includes(filename) || p.endsWith(filename));
+      if (matchingMount) {
+        fileRouterPrefix = matchingMount;
+      }
 
       // -------------------------------------------------------------
       // 1. NESTJS DECORATOR DETECTION (@Controller + @Get/@Post/...)
@@ -127,13 +159,32 @@ export function sniffProjectRoutes(targetDir: string = process.cwd()): Discovere
           return;
         }
 
-        // Express / Fastify / Hono / Polka: app.get("/path"), router.post("/path")
+        // Express / Fastify / Hono: app.get("/path"), router.post("/path")
         const expressMatch = lineText.match(/(?:app|router|server|instance|hono)\.(get|post|put|delete|patch|all)\s*\(\s*["']([^"']+)["']/i);
         if (expressMatch) {
+          let routePath = expressMatch[2];
+          if (!routePath.startsWith("/")) routePath = "/" + routePath;
+
+          // If router mount prefix was detected (e.g. /api or /api/v1), combine it!
+          if (detectedMountPrefixes.length > 0 && !detectedMountPrefixes.some(p => routePath.startsWith(p))) {
+            const primaryMount = detectedMountPrefixes[0];
+            const prefixedPath = (primaryMount.endsWith("/") ? primaryMount.slice(0, -1) : primaryMount) + routePath;
+            
+            routes.push({
+              id: `route-${idCounter++}`,
+              method: expressMatch[1].toUpperCase() === "ALL" ? "GET" : expressMatch[1].toUpperCase(),
+              path: prefixedPath,
+              file: relPath,
+              line: lineNum,
+              framework: "Express/Fastify",
+              suggestedBody: ["POST", "PUT", "PATCH"].includes(expressMatch[1].toUpperCase()) ? { sample_field: "test_value" } : undefined
+            });
+          }
+
           routes.push({
             id: `route-${idCounter++}`,
             method: expressMatch[1].toUpperCase() === "ALL" ? "GET" : expressMatch[1].toUpperCase(),
-            path: expressMatch[2],
+            path: routePath,
             file: relPath,
             line: lineNum,
             framework: "Express/Fastify",
@@ -142,7 +193,7 @@ export function sniffProjectRoutes(targetDir: string = process.cwd()): Discovere
           return;
         }
 
-        // Python FastAPI / Flask / Bottle: @app.get("/path"), @router.post("/path"), @app.route("/path")
+        // Python FastAPI / Flask: @app.get("/path"), @router.post("/path")
         const pythonMatch = lineText.match(/@(?:app|router|api)\.(get|post|put|delete|patch|route)\s*\(\s*["']([^"']+)["']/i);
         if (pythonMatch) {
           let method = pythonMatch[1].toUpperCase();
@@ -175,7 +226,7 @@ export function sniffProjectRoutes(targetDir: string = process.cwd()): Discovere
           return;
         }
 
-        // Go (Gin, Echo, Fiber, Chi, net/http): r.GET("/ping"), e.POST("/users")
+        // Go (Gin, Echo, Fiber): r.GET("/ping"), e.POST("/users")
         const goMatch = lineText.match(/(?:r|router|api|group|e|app|mux)\.(GET|POST|PUT|DELETE|PATCH|HandleFunc|Get|Post)\s*\(\s*["']([^"']+)["']/);
         if (goMatch) {
           let method = goMatch[1].toUpperCase();
@@ -191,7 +242,7 @@ export function sniffProjectRoutes(targetDir: string = process.cwd()): Discovere
           return;
         }
 
-        // Laravel PHP: Route::get('/users', ...), Route::post('/login', ...)
+        // Laravel PHP: Route::get('/users', ...)
         const laravelMatch = lineText.match(/Route::(get|post|put|delete|patch)\s*\(\s*["']([^"']+)["']/i);
         if (laravelMatch) {
           routes.push({
@@ -210,7 +261,7 @@ export function sniffProjectRoutes(targetDir: string = process.cwd()): Discovere
     }
   }
 
-  // Next.js App Router (app/api/.../route.ts) and Pages Router (pages/api/...)
+  // Next.js App Router & Pages Router
   for (const file of filesToScan) {
     if (file.includes("app/api/") && /(route|index)\.(ts|js)$/.test(file)) {
       try {
