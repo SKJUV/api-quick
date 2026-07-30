@@ -1,18 +1,20 @@
 {
   "version": 2,
   "cleanUrls": true,
+  "outputDirectory": "docs",
+  "buildCommand": null,
   "rewrites": [
     {
       "source": "/api-quick",
-      "destination": "/docs/index.html"
+      "destination": "/index.html"
     },
     {
       "source": "/api-quick/(.*)",
-      "destination": "/docs/$1"
+      "destination": "/$1"
     },
     {
       "source": "/",
-      "destination": "/docs/index.html"
+      "destination": "/index.html"
     }
   ]
 }
