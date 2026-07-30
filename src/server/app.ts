@@ -18,7 +18,7 @@ export interface ExecutionLog {
 
 const executionLogs: ExecutionLog[] = [];
 
-export function createWebServer() {
+export function createWebServer(currentPort: number = 4000) {
   const app = new Hono();
 
   // Allow all CORS origins for local web client
@@ -33,15 +33,17 @@ export function createWebServer() {
     return c.json({ routes, count: routes.length });
   });
 
-  // Probe active local ports to find running backend
+  // Probe active local ports to find running backend (EXCLUDING api-quick's own port!)
   app.get("/api/probe-ports", async (c) => {
-    const commonPorts = [3000, 3001, 5000, 5001, 8080, 8000, 4000, 9000];
+    const candidatePorts = [3000, 3001, 5000, 5001, 8080, 8000, 9000, 3002];
     const activePorts: number[] = [];
 
-    for (const port of commonPorts) {
+    for (const port of candidatePorts) {
+      if (port === currentPort) continue; // EXCLUDE api-quick's own port!
+
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 200);
+        const timeoutId = setTimeout(() => controller.abort(), 250);
         const res = await fetch(`http://127.0.0.1:${port}`, { signal: controller.signal });
         clearTimeout(timeoutId);
         if (res.status) activePorts.push(port);
@@ -49,7 +51,7 @@ export function createWebServer() {
         // Port not active or refused
       }
     }
-    return c.json({ activePorts });
+    return c.json({ activePorts, currentPort });
   });
 
   // Action execution logs history endpoint
@@ -133,13 +135,13 @@ export function createWebServer() {
         method,
         url: targetUrl,
         status: 502,
-        statusText: "Bad Gateway / Target Server Not Running",
+        statusText: "Bad Gateway / Connection Refused",
         durationMs: totalTime,
         responseSize: 0,
-        responseBody: `Connection Refused to ${targetUrl}. Is your backend server running on this port?`
+        responseBody: `Connection Refused to ${targetUrl}. Make sure your backend server is running on this port.`
       });
 
-      return c.json({ error: `Proxy Request Failed: Connection Refused to ${targetUrl}. Check if your backend is running on this port.` }, 502);
+      return c.json({ error: `Proxy Request Failed: Connection Refused to ${targetUrl}. Is your backend server running on this port?` }, 502);
     }
   });
 
@@ -323,9 +325,9 @@ function getWebUiHtml(): string {
   <div class="layout-container">
     <!-- Config Bar for Backend Host & Port -->
     <div class="base-url-box">
-      <span style="color: var(--muted); font-weight: 600;">🎯 Target Backend Base Host:</span>
+      <span style="color: var(--muted); font-weight: 600;">🎯 Target Backend Server Host:</span>
       <input type="text" id="baseHostInput" value="http://localhost:3000" style="max-width: 260px; padding: 4px 8px; font-size: 0.85rem;" />
-      <span id="activePortsNotice" style="color: var(--green); font-weight: 600; font-size: 0.8rem;"></span>
+      <span id="activePortsNotice" style="color: var(--yellow); font-weight: 600; font-size: 0.8rem;"></span>
     </div>
 
     <main>
@@ -411,12 +413,12 @@ function getWebUiHtml(): string {
         const res = await fetch('/api/probe-ports');
         const data = await res.json();
         if (data.activePorts && data.activePorts.length > 0) {
-          activePortsNotice.textContent = '🟢 Detected running backend port(s): ' + data.activePorts.join(', ');
-          if (!data.activePorts.includes(3000)) {
-            baseHostInput.value = 'http://localhost:' + data.activePorts[0];
-          }
+          activePortsNotice.style.color = 'var(--green)';
+          activePortsNotice.textContent = '🟢 Active local backend detected on port(s): ' + data.activePorts.join(', ');
+          baseHostInput.value = 'http://localhost:' + data.activePorts[0];
         } else {
-          activePortsNotice.textContent = '⚠️ No local backend detected running yet on ports 3000/5000/8080';
+          activePortsNotice.style.color = 'var(--yellow)';
+          activePortsNotice.textContent = '⚠️ Ensure your backend (Express/NestJS) is running on port 3000/5000/8080';
         }
       } catch (e) {}
     }
@@ -461,8 +463,13 @@ function getWebUiHtml(): string {
         \`;
         item.addEventListener('click', () => {
           methodSelect.value = r.method;
-          const baseHost = baseHostInput.value.trim().replace(/\\/$/, '');
-          urlInput.value = r.path.startsWith('http') ? r.path : baseHost + (r.path.startsWith('/') ? r.path : '/' + r.path);
+          let baseHost = baseHostInput.value.trim().replace(/\\/$/, '');
+          let cleanPath = r.path.startsWith('/') ? r.path : '/' + r.path;
+
+          // Replace route URL params like :id with dummy sample value
+          cleanPath = cleanPath.replace(/:([a-zA-Z0-9_]+)/g, '1');
+
+          urlInput.value = r.path.startsWith('http') ? r.path : baseHost + cleanPath;
           if (r.suggestedBody && Object.keys(r.suggestedBody).length > 0) {
             bodyInput.value = JSON.stringify(r.suggestedBody, null, 2);
           } else {

@@ -87,7 +87,7 @@ async function main() {
       console.log(`\x1b[33m⚠️ Port ${requestedPort} is already in use. Automatically switching to port ${availablePort}...\x1b[0m`);
     }
 
-    const app = createWebServer();
+    const app = createWebServer(availablePort);
     console.log(`\n\x1b[1m\x1b[36m⚡ Launching api-quick Web Workbench & CORS Proxy Server...\x1b[0m`);
     console.log(`\x1b[32m✔ Server running at:\x1b[0m \x1b[1mhttp://localhost:${availablePort}\x1b[0m`);
     console.log(`\x1b[90m(Press Ctrl+C to stop)\x1b[0m\n`);
