@@ -9,6 +9,7 @@
   "type": "module",
   "scripts": {
     "build": "tsc",
+    "prepare": "npm run build",
     "dev": "tsx watch src/index.ts",
     "test": "node --test",
     "lint": "tsc --noEmit"
