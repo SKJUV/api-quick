@@ -135,10 +135,10 @@ export function createWebServer(currentPort: number = 4000) {
         method,
         url: targetUrl,
         status: 502,
-        statusText: "Bad Gateway / Connection Refused",
+        statusText: "Bad Gateway",
         durationMs: totalTime,
         responseSize: 0,
-        responseBody: `Connection Refused to ${targetUrl}. Make sure your backend server is running on this port.`
+        responseBody: `Connection Refused to ${targetUrl}. Please ensure target backend server is running.`
       });
 
       return c.json({ error: `Proxy Request Failed: Connection Refused to ${targetUrl}. Is your backend server running on this port?` }, 502);
@@ -159,192 +159,381 @@ function getWebUiHtml(): string {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>⚡ api-quick - Vibe Coder Web Workbench</title>
+  <title>api-quick — API Workbench & Automation Engine</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #0f172a;
-      --panel: #1e293b;
-      --border: #334155;
-      --text: #f8fafc;
-      --muted: #94a3b8;
-      --primary: #38bdf8;
-      --green: #22c55e;
-      --yellow: #eab308;
+      --bg: #090d16;
+      --panel: #131b2e;
+      --card-bg: #182238;
+      --border: #23314d;
+      --border-hover: #33466d;
+      --text: #f1f5f9;
+      --text-muted: #94a3b8;
+      --primary: #0284c7;
+      --primary-hover: #0369a1;
+      --accent: #38bdf8;
+      --green: #10b981;
+      --yellow: #f59e0b;
       --red: #ef4444;
-      --purple: #a855f7;
+      --purple: #8b5cf6;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       background-color: var(--bg);
       color: var(--text);
-      font-family: 'Inter', sans-serif;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
       height: 100vh;
       display: flex;
       flex-direction: column;
+      overflow: hidden;
     }
     header {
       background: var(--panel);
       border-bottom: 1px solid var(--border);
-      padding: 12px 24px;
+      padding: 10px 20px;
       display: flex;
       align-items: center;
       justify-content: space-between;
     }
-    .logo { font-size: 1.2rem; font-weight: 700; color: var(--primary); display: flex; align-items: center; gap: 8px; }
-    .badge { background: #0284c7; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; }
-    .vibe-tag { background: rgba(168, 85, 247, 0.2); color: var(--purple); padding: 4px 10px; border-radius: 16px; font-size: 0.8rem; font-weight: 600; }
+    .logo {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--accent);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      letter-spacing: -0.3px;
+    }
+    .badge {
+      background: rgba(56, 189, 248, 0.1);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      color: var(--accent);
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .status-indicator {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+    .dot-active {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background-color: var(--green);
+      box-shadow: 0 0 8px var(--green);
+    }
     
     .layout-container {
       flex: 1;
       display: flex;
       flex-direction: column;
-      padding: 16px;
-      gap: 16px;
+      padding: 12px;
+      gap: 12px;
       overflow: hidden;
     }
+
+    .base-url-bar {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.85rem;
+    }
+    .base-url-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    
     main {
       flex: 2;
       display: grid;
-      grid-template-columns: 340px 1fr 1fr;
-      gap: 16px;
+      grid-template-columns: 360px 1fr 1fr;
+      gap: 12px;
       overflow: hidden;
     }
+
     .card {
       background: var(--panel);
       border: 1px solid var(--border);
-      border-radius: 8px;
+      border-radius: 6px;
       display: flex;
       flex-direction: column;
       overflow: hidden;
     }
     .card-header {
-      background: rgba(0,0,0,0.2);
-      padding: 12px 16px;
+      background: rgba(0,0,0,0.25);
+      padding: 10px 14px;
       border-bottom: 1px solid var(--border);
+      font-size: 0.85rem;
       font-weight: 600;
       display: flex;
       justify-content: space-between;
       align-items: center;
     }
-    .route-list, .log-list {
+    
+    .search-input-box {
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+      background: var(--card-bg);
+    }
+    .search-input-box input {
+      width: 100%;
+      background: #0d1322;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 6px 10px;
+      color: var(--text);
+      font-size: 0.8rem;
+    }
+
+    .route-list {
       flex: 1;
       overflow-y: auto;
       padding: 8px;
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 6px;
     }
-    .route-item, .log-item {
-      background: #090d16;
+    .route-item {
+      background: var(--card-bg);
       border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 10px;
+      border-radius: 5px;
+      padding: 8px 10px;
       cursor: pointer;
-      transition: all 0.15s;
+      transition: all 0.12s ease;
     }
-    .route-item:hover, .log-item:hover { border-color: var(--primary); transform: translateY(-1px); }
-    .route-top, .log-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
-    .method-badge { font-weight: 700; font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; }
-    .method-GET { background: rgba(56, 189, 248, 0.2); color: var(--primary); }
-    .method-POST { background: rgba(34, 197, 94, 0.2); color: var(--green); }
-    .method-PUT { background: rgba(234, 179, 8, 0.2); color: var(--yellow); }
-    .method-PATCH { background: rgba(168, 85, 247, 0.2); color: var(--purple); }
-    .method-DELETE { background: rgba(239, 68, 68, 0.2); color: var(--red); }
-    .route-path, .log-url { font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; font-weight: 600; color: #fff; word-break: break-all; }
-    .route-meta, .log-meta { font-size: 0.75rem; color: var(--muted); margin-top: 4px; display: flex; justify-content: space-between; }
+    .route-item:hover {
+      border-color: var(--accent);
+      background: #1e2c48;
+    }
+    .route-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 4px;
+    }
+    .method-badge {
+      font-weight: 700;
+      font-size: 0.65rem;
+      padding: 2px 6px;
+      border-radius: 3px;
+      letter-spacing: 0.5px;
+    }
+    .method-GET { background: rgba(56, 189, 248, 0.15); color: var(--accent); border: 1px solid rgba(56, 189, 248, 0.3); }
+    .method-POST { background: rgba(16, 185, 129, 0.15); color: var(--green); border: 1px solid rgba(16, 185, 129, 0.3); }
+    .method-PUT { background: rgba(245, 158, 11, 0.15); color: var(--yellow); border: 1px solid rgba(245, 158, 11, 0.3); }
+    .method-PATCH { background: rgba(139, 92, 246, 0.15); color: var(--purple); border: 1px solid rgba(139, 92, 246, 0.3); }
+    .method-DELETE { background: rgba(239, 68, 68, 0.15); color: var(--red); border: 1px solid rgba(239, 68, 68, 0.3); }
     
-    .request-bar { display: flex; gap: 8px; padding: 16px; }
-    select, input, button, textarea {
-      font-family: inherit;
-      font-size: 0.9rem;
-      border-radius: 6px;
-      border: 1px solid var(--border);
-      background: #090d16;
+    .route-path {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8rem;
+      font-weight: 600;
       color: var(--text);
-      padding: 8px 12px;
+      word-break: break-all;
     }
-    select { background: #1e293b; color: var(--primary); font-weight: 600; cursor: pointer; }
-    input[type="text"] { flex: 1; font-family: 'JetBrains Mono', monospace; }
-    button.send-btn {
-      background: #0284c7;
+    .route-meta {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      margin-top: 4px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .request-bar {
+      display: flex;
+      gap: 8px;
+      padding: 12px;
+      background: var(--card-bg);
+      border-bottom: 1px solid var(--border);
+    }
+    select, input[type="text"], button, textarea {
+      font-family: inherit;
+      font-size: 0.85rem;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      background: #0c1220;
+      color: var(--text);
+      padding: 8px 10px;
+    }
+    select {
+      background: var(--panel);
+      color: var(--accent);
+      font-weight: 600;
+      cursor: pointer;
+      outline: none;
+    }
+    input[type="text"] {
+      flex: 1;
+      font-family: 'JetBrains Mono', monospace;
+      outline: none;
+    }
+    input[type="text"]:focus {
+      border-color: var(--accent);
+    }
+    button.btn-primary {
+      background: var(--primary);
       color: white;
       font-weight: 600;
-      padding: 8px 24px;
+      padding: 8px 18px;
       cursor: pointer;
       border: none;
-      transition: background 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: background 0.15s;
     }
-    button.send-btn:hover { background: #0369a1; }
-    .form-group { padding: 12px 16px; display: flex; flex-direction: column; gap: 8px; }
-    label { font-size: 0.8rem; color: var(--muted); text-transform: uppercase; font-weight: 600; }
-    textarea { height: 140px; font-family: 'JetBrains Mono', monospace; resize: vertical; }
+    button.btn-primary:hover { background: var(--primary-hover); }
+    button.btn-secondary {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      font-size: 0.78rem;
+    }
+    button.btn-secondary:hover { border-color: var(--border-hover); background: #22304d; }
+
+    .form-group {
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    label {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+    textarea {
+      height: 120px;
+      font-family: 'JetBrains Mono', monospace;
+      resize: vertical;
+      outline: none;
+    }
+    textarea:focus { border-color: var(--accent); }
+
     pre {
       font-family: 'JetBrains Mono', monospace;
-      padding: 16px;
-      font-size: 0.85rem;
+      padding: 14px;
+      font-size: 0.82rem;
       overflow: auto;
       flex: 1;
       white-space: pre-wrap;
-      background: #090d16;
+      background: #0c1220;
+      line-height: 1.45;
     }
-    .status-tag { font-weight: 700; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; }
-    .status-2xx { background: rgba(34, 197, 94, 0.2); color: var(--green); }
-    .status-4xx, .status-5xx { background: rgba(239, 68, 68, 0.2); color: var(--red); }
+    .status-tag {
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 0.78rem;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .status-2xx { background: rgba(16, 185, 129, 0.15); color: var(--green); border: 1px solid rgba(16, 185, 129, 0.3); }
+    .status-4xx, .status-5xx { background: rgba(239, 68, 68, 0.15); color: var(--red); border: 1px solid rgba(239, 68, 68, 0.3); }
 
     /* Bottom Activity Drawer */
     .activity-drawer {
-      height: 200px;
+      height: 190px;
       background: var(--panel);
       border: 1px solid var(--border);
-      border-radius: 8px;
+      border-radius: 6px;
       display: flex;
       flex-direction: column;
       overflow: hidden;
     }
-    .base-url-box {
-      background: #090d16;
-      border-bottom: 1px solid var(--border);
-      padding: 8px 16px;
+    .log-list {
+      flex: 1;
+      overflow-x: auto;
+      padding: 8px;
       display: flex;
+      gap: 8px;
       align-items: center;
-      gap: 12px;
-      font-size: 0.85rem;
     }
+    .log-item {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      padding: 8px 10px;
+      min-width: 260px;
+      cursor: pointer;
+      transition: all 0.12s;
+    }
+    .log-item:hover { border-color: var(--accent); }
+    .log-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+    .log-url { font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .log-meta { font-size: 0.72rem; color: var(--text-muted); margin-top: 4px; display: flex; justify-content: space-between; }
+    
+    svg.icon { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
   </style>
 </head>
 <body>
+  <!-- Header -->
   <header>
-    <div class="logo">⚡ api-quick <span class="badge">v0.1.0</span></div>
-    <div class="vibe-tag">✨ Vibe Coder Auto-Sniffing & Telemetry Active</div>
-    <div style="font-size: 0.85rem; color: var(--muted);">CORS Proxy: Active</div>
+    <div class="logo">
+      <svg class="icon" style="width:18px; height:18px; stroke: var(--accent);" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+      api-quick
+      <span class="badge">v0.1.0 Engine</span>
+    </div>
+    <div class="status-indicator">
+      <div class="dot-active"></div>
+      CORS Bypass Proxy & AST Scanner Active
+    </div>
   </header>
 
   <div class="layout-container">
     <!-- Config Bar for Backend Host & Port -->
-    <div class="base-url-box">
-      <span style="color: var(--muted); font-weight: 600;">🎯 Target Backend Server Host:</span>
-      <input type="text" id="baseHostInput" value="http://localhost:3000" style="max-width: 260px; padding: 4px 8px; font-size: 0.85rem;" />
-      <span id="activePortsNotice" style="color: var(--yellow); font-weight: 600; font-size: 0.8rem;"></span>
+    <div class="base-url-bar">
+      <div class="base-url-left">
+        <span style="color: var(--text-muted); font-weight: 600;">Target Server Host:</span>
+        <input type="text" id="baseHostInput" value="http://localhost:3000" style="width: 240px; padding: 4px 8px; font-size: 0.82rem;" />
+      </div>
+      <div id="activePortsNotice" style="color: var(--yellow); font-size: 0.8rem; font-weight: 500;"></div>
     </div>
 
     <main>
       <!-- Left Sidebar: Discovered Routes Catalog -->
       <div class="card">
         <div class="card-header">
-          <span>Project AST Routes (<span id="routeCount">0</span>)</span>
-          <button id="resniffBtn" style="padding: 2px 8px; font-size: 0.75rem; background: #334155; border: none; color: #fff; cursor: pointer;">Scan</button>
+          <span>Discovered AST Routes (<span id="routeCount">0</span>)</span>
+          <button id="resniffBtn" class="btn-secondary">
+            <svg class="icon" viewBox="0 0 24 24"><path d="M21.5 2v6h-6M2.13 15.57a10 10 0 1 0 4-13.84L1.5 8"></path></svg>
+            Refresh AST
+          </button>
+        </div>
+        <div class="search-input-box">
+          <input type="text" id="routeSearchInput" placeholder="Filter routes by path or method..." />
         </div>
         <div id="routeList" class="route-list">
-          <div style="padding: 16px; color: var(--muted); font-size: 0.85rem;">Scanning workspace for API routes...</div>
+          <div style="padding: 16px; color: var(--text-muted); font-size: 0.8rem;">Scanning workspace directory...</div>
         </div>
       </div>
 
       <!-- Request Panel -->
       <div class="card">
-        <div class="card-header">HTTP Request Builder</div>
+        <div class="card-header">
+          <span>HTTP Request Builder</span>
+        </div>
         <div class="request-bar">
           <select id="methodSelect">
             <option value="GET">GET</option>
@@ -353,12 +542,15 @@ function getWebUiHtml(): string {
             <option value="PATCH">PATCH</option>
             <option value="DELETE">DELETE</option>
           </select>
-          <input type="text" id="urlInput" value="http://localhost:3000/health" placeholder="Enter request URL..." />
-          <button class="send-btn" id="sendBtn">1-Click Test ⚡</button>
+          <input type="text" id="urlInput" value="http://localhost:3000/api/health" placeholder="Enter target request URL..." />
+          <button class="btn-primary" id="sendBtn">
+            <svg class="icon" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+            Execute
+          </button>
         </div>
 
         <div class="form-group">
-          <label>Headers (JSON Format)</label>
+          <label>Headers (JSON)</label>
           <textarea id="headersInput">{\n  "Accept": "application/json"\n}</textarea>
         </div>
 
@@ -371,21 +563,24 @@ function getWebUiHtml(): string {
       <!-- Response Panel -->
       <div class="card">
         <div class="card-header">
-          <span>Response View</span>
+          <span>Response Inspector</span>
           <span id="metricsBadge" class="status-tag" style="display:none;"></span>
         </div>
-        <pre id="responseOutput">// Click any discovered route in the left panel to test it instantly!</pre>
+        <pre id="responseOutput">// Select any discovered route from the left sidebar to execute request.</pre>
       </div>
     </main>
 
     <!-- Bottom Activity Drawer: Action Execution Telemetry Logs -->
     <div class="activity-drawer">
       <div class="card-header">
-        <span>📋 Executed Action Telemetry Logs</span>
-        <button id="clearLogsBtn" style="padding: 2px 8px; font-size: 0.75rem; background: #ef4444; border: none; color: #fff; cursor: pointer; border-radius: 4px;">Clear Logs</button>
+        <span>Execution Telemetry Logs</span>
+        <button id="clearLogsBtn" class="btn-secondary" style="color: var(--red); border-color: rgba(239, 68, 68, 0.3);">
+          <svg class="icon" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+          Clear Logs
+        </button>
       </div>
-      <div id="logList" class="log-list" style="flex-direction: row; flex-wrap: nowrap; overflow-x: auto;">
-        <div style="padding: 16px; color: var(--muted); font-size: 0.85rem;">No execution logs recorded yet.</div>
+      <div id="logList" class="log-list">
+        <div style="padding: 14px; color: var(--text-muted); font-size: 0.8rem;">No execution logs recorded yet.</div>
       </div>
     </div>
   </div>
@@ -393,6 +588,7 @@ function getWebUiHtml(): string {
   <script>
     const routeList = document.getElementById('routeList');
     const routeCount = document.getElementById('routeCount');
+    const routeSearchInput = document.getElementById('routeSearchInput');
     const resniffBtn = document.getElementById('resniffBtn');
     const sendBtn = document.getElementById('sendBtn');
     const methodSelect = document.getElementById('methodSelect');
@@ -406,6 +602,7 @@ function getWebUiHtml(): string {
     const baseHostInput = document.getElementById('baseHostInput');
     const activePortsNotice = document.getElementById('activePortsNotice');
 
+    let allRoutes = [];
     let allLogs = [];
 
     async function probeActivePorts() {
@@ -414,11 +611,11 @@ function getWebUiHtml(): string {
         const data = await res.json();
         if (data.activePorts && data.activePorts.length > 0) {
           activePortsNotice.style.color = 'var(--green)';
-          activePortsNotice.textContent = '🟢 Active local backend detected on port(s): ' + data.activePorts.join(', ');
+          activePortsNotice.textContent = 'Active backend port detected: ' + data.activePorts.join(', ');
           baseHostInput.value = 'http://localhost:' + data.activePorts[0];
         } else {
           activePortsNotice.style.color = 'var(--yellow)';
-          activePortsNotice.textContent = '⚠️ Ensure your backend (Express/NestJS) is running on port 3000/5000/8080';
+          activePortsNotice.textContent = 'Specify running backend host above (e.g. http://localhost:3000)';
         }
       } catch (e) {}
     }
@@ -427,9 +624,10 @@ function getWebUiHtml(): string {
       try {
         const res = await fetch('/api/routes');
         const data = await res.json();
-        renderRoutes(data.routes || []);
+        allRoutes = data.routes || [];
+        renderRoutes(allRoutes);
       } catch (e) {
-        routeList.innerHTML = '<div style="padding:16px; color:var(--red);">Failed to scan routes</div>';
+        routeList.innerHTML = '<div style="padding:14px; color:var(--red);">Failed to scan workspace routes</div>';
       }
     }
 
@@ -443,23 +641,33 @@ function getWebUiHtml(): string {
     }
 
     function renderRoutes(routes) {
-      routeCount.textContent = routes.length;
-      if (routes.length === 0) {
-        routeList.innerHTML = '<div style="padding:16px; color:var(--muted); font-size:0.85rem;">No routes auto-detected in this directory. Add Express/FastAPI/Next.js/NestJS code to test!</div>';
+      const searchTerm = routeSearchInput.value.toLowerCase().trim();
+      const filtered = routes.filter(r => 
+        r.path.toLowerCase().includes(searchTerm) || 
+        r.method.toLowerCase().includes(searchTerm) ||
+        r.framework.toLowerCase().includes(searchTerm)
+      );
+
+      routeCount.textContent = filtered.length;
+
+      if (filtered.length === 0) {
+        routeList.innerHTML = '<div style="padding:14px; color:var(--text-muted); font-size:0.8rem;">No routes matching filter.</div>';
         return;
       }
 
       routeList.innerHTML = '';
-      routes.forEach((r) => {
+      filtered.forEach((r) => {
         const item = document.createElement('div');
         item.className = 'route-item';
         item.innerHTML = \`
           <div class="route-top">
             <span class="method-badge method-\${r.method}">\${r.method}</span>
-            <span style="font-size: 0.7rem; color: var(--purple);">\${r.framework}</span>
+            <span style="font-size: 0.68rem; color: var(--purple); font-weight: 600;">\${r.framework}</span>
           </div>
           <div class="route-path">\${r.path}</div>
-          <div class="route-meta">📁 \${r.file}:\${r.line}</div>
+          <div class="route-meta">
+            <span>\${r.file}:\${r.line}</span>
+          </div>
         \`;
         item.addEventListener('click', () => {
           methodSelect.value = r.method;
@@ -483,7 +691,7 @@ function getWebUiHtml(): string {
 
     function renderLogs(logs) {
       if (logs.length === 0) {
-        logList.innerHTML = '<div style="padding:16px; color:var(--muted); font-size:0.85rem;">No execution logs recorded yet.</div>';
+        logList.innerHTML = '<div style="padding:14px; color:var(--text-muted); font-size:0.8rem;">No execution logs recorded.</div>';
         return;
       }
 
@@ -491,7 +699,6 @@ function getWebUiHtml(): string {
       logs.forEach((log) => {
         const item = document.createElement('div');
         item.className = 'log-item';
-        item.style.minWidth = '280px';
         const statusColorClass = log.status < 300 ? 'status-2xx' : 'status-4xx';
 
         item.innerHTML = \`
@@ -501,8 +708,8 @@ function getWebUiHtml(): string {
           </div>
           <div class="log-url">\${log.url}</div>
           <div class="log-meta">
-            <span>⏱️ \${log.durationMs}ms</span>
-            <span>🕒 \${log.timestamp}</span>
+            <span>Duration: \${log.durationMs}ms</span>
+            <span>\${log.timestamp}</span>
           </div>
         \`;
 
@@ -527,12 +734,13 @@ function getWebUiHtml(): string {
       });
     }
 
+    routeSearchInput.addEventListener('input', () => renderRoutes(allRoutes));
+    resniffBtn.addEventListener('click', loadDiscoveredRoutes);
+
     clearLogsBtn.addEventListener('click', async () => {
       await fetch('/api/logs', { method: 'DELETE' });
       loadExecutionLogs();
     });
-
-    resniffBtn.addEventListener('click', loadDiscoveredRoutes);
 
     sendBtn.addEventListener('click', async () => {
       let url = urlInput.value.trim();
@@ -540,7 +748,7 @@ function getWebUiHtml(): string {
       
       if (!url) return alert('Please enter a target URL');
 
-      responseOutput.textContent = 'Executing 1-Click test via local CORS bypass proxy...';
+      responseOutput.textContent = 'Executing request via CORS proxy...';
       metricsBadge.style.display = 'none';
 
       let headers = {};
