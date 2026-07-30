@@ -296,12 +296,14 @@ function getWebUiHtml(): string {
       display: flex;
       align-items: center;
       justify-content: space-between;
+      gap: 16px;
       font-size: 0.85rem;
     }
     .base-url-left {
       display: flex;
       align-items: center;
       gap: 10px;
+      flex: 1;
     }
     
     main {
@@ -556,13 +558,15 @@ function getWebUiHtml(): string {
   </header>
 
   <div class="layout-container">
-    <!-- Config Bar for Backend Host & Port -->
+    <!-- Config Bar for Backend Host, Port, and Authorization Token -->
     <div class="base-url-bar">
       <div class="base-url-left">
-        <span style="color: var(--text-muted); font-weight: 600;">Target Server Host:</span>
-        <input type="text" id="baseHostInput" value="http://localhost:3000" style="width: 240px; padding: 4px 8px; font-size: 0.82rem;" />
+        <span style="color: var(--text-muted); font-weight: 600;">Target Host:</span>
+        <input type="text" id="baseHostInput" value="http://localhost:4000" style="width: 200px; padding: 4px 8px; font-size: 0.82rem;" />
+        <span style="color: var(--text-muted); font-weight: 600; margin-left: 10px;">Bearer Auth Token:</span>
+        <input type="text" id="authTokenInput" placeholder="Paste Bearer Token or auto-capture on /login..." style="flex: 1; padding: 4px 8px; font-size: 0.82rem; color: var(--accent);" />
       </div>
-      <div id="activePortsNotice" style="color: var(--yellow); font-size: 0.8rem; font-weight: 500;"></div>
+      <div id="activePortsNotice" style="color: var(--green); font-size: 0.8rem; font-weight: 500;"></div>
     </div>
 
     <main>
@@ -596,7 +600,7 @@ function getWebUiHtml(): string {
             <option value="PATCH">PATCH</option>
             <option value="DELETE">DELETE</option>
           </select>
-          <input type="text" id="urlInput" value="http://localhost:3000/api/health" placeholder="Enter target request URL..." />
+          <input type="text" id="urlInput" value="http://localhost:4000/api/v1/admin/dashboard" placeholder="Enter target request URL..." />
           <button class="btn-primary" id="sendBtn">
             <svg class="icon" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
             Execute
@@ -610,7 +614,7 @@ function getWebUiHtml(): string {
 
         <div class="form-group">
           <label>JSON Body Payload</label>
-          <textarea id="bodyInput" placeholder='{\n  "email": "user@example.com"\n}'></textarea>
+          <textarea id="bodyInput" placeholder='{\n  "email": "admin@example.com",\n  "password": "secretpassword"\n}'></textarea>
         </div>
       </div>
 
@@ -654,6 +658,7 @@ function getWebUiHtml(): string {
     const logList = document.getElementById('logList');
     const clearLogsBtn = document.getElementById('clearLogsBtn');
     const baseHostInput = document.getElementById('baseHostInput');
+    const authTokenInput = document.getElementById('authTokenInput');
     const activePortsNotice = document.getElementById('activePortsNotice');
     const themeToggleBtn = document.getElementById('themeToggleBtn');
     const themeLabel = document.getElementById('themeLabel');
@@ -676,11 +681,8 @@ function getWebUiHtml(): string {
         const data = await res.json();
         if (data.activePorts && data.activePorts.length > 0) {
           activePortsNotice.style.color = 'var(--green)';
-          activePortsNotice.textContent = '🟢 Active running backend detected on port: ' + data.activePorts[0];
+          activePortsNotice.textContent = 'Active running backend detected on port: ' + data.activePorts[0];
           baseHostInput.value = 'http://localhost:' + data.activePorts[0];
-        } else {
-          activePortsNotice.style.color = 'var(--yellow)';
-          activePortsNotice.textContent = '⚠️ Start your backend server (e.g. node src/server.js on port 4000/3000/5000)';
         }
       } catch (e) {}
     }
@@ -823,6 +825,12 @@ function getWebUiHtml(): string {
         return alert('Invalid JSON in Headers');
       }
 
+      // Auto-inject Bearer Token if populated
+      const token = authTokenInput.value.trim();
+      if (token) {
+        headers['Authorization'] = token.startsWith('Bearer ') ? token : 'Bearer ' + token;
+      }
+
       let body = undefined;
       if (['POST', 'PUT', 'PATCH'].includes(method) && bodyInput.value.trim()) {
         body = bodyInput.value.trim();
@@ -852,6 +860,12 @@ function getWebUiHtml(): string {
         try {
           const parsed = JSON.parse(text);
           responseOutput.textContent = JSON.stringify(parsed, null, 2);
+
+          // Auto-capture token if response returns token
+          const extractedToken = parsed.token || parsed.accessToken || parsed.access_token || parsed.jwt;
+          if (extractedToken && typeof extractedToken === 'string') {
+            authTokenInput.value = extractedToken;
+          }
         } catch {
           responseOutput.textContent = text;
         }
