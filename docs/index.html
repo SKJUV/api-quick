@@ -3,36 +3,36 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>api-quick — Modern API Workbench & Automation Platform</title>
+  <title>api-quick — Official Documentation & Developer Guide</title>
   <meta name="description" content="High-performance HTTP engine, polyglot AST route sniffer, E2E workflow runner, and developer API workbench." />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
     :root[data-theme="dark"] {
-      --bg: #090d16;
-      --panel: #0f172a;
-      --card-bg: #1e293b;
-      --border: #334155;
-      --border-hover: #475569;
+      --bg-gradient: radial-gradient(circle at 50% 0%, #1e293b 0%, #0f172a 50%, #080c14 100%);
+      --panel: rgba(15, 23, 42, 0.7);
+      --card-bg: rgba(30, 41, 59, 0.6);
+      --border: rgba(255, 255, 255, 0.08);
+      --border-hover: rgba(56, 189, 248, 0.35);
       --text: #f8fafc;
       --text-muted: #94a3b8;
-      --primary: #0284c7;
-      --primary-hover: #0369a1;
+      --primary: #38bdf8;
+      --primary-hover: #0284c7;
       --accent: #38bdf8;
       --green: #10b981;
       --yellow: #f59e0b;
-      --red: #ef4444;
-      --purple: #8b5cf6;
-      --code-bg: #020617;
+      --red: #f43f5e;
+      --purple: #a855f7;
+      --code-bg: rgba(2, 6, 23, 0.85);
       --sidebar-width: 280px;
     }
     :root[data-theme="light"] {
-      --bg: #f8fafc;
-      --panel: #ffffff;
-      --card-bg: #f1f5f9;
-      --border: #cbd5e1;
-      --border-hover: #94a3b8;
+      --bg-gradient: radial-gradient(circle at 50% 0%, #e2e8f0 0%, #f1f5f9 50%, #f8fafc 100%);
+      --panel: rgba(255, 255, 255, 0.8);
+      --card-bg: rgba(241, 245, 249, 0.75);
+      --border: rgba(0, 0, 0, 0.08);
+      --border-hover: rgba(2, 132, 199, 0.35);
       --text: #0f172a;
       --text-muted: #64748b;
       --primary: #0284c7;
@@ -40,15 +40,25 @@
       --accent: #0284c7;
       --green: #059669;
       --yellow: #d97706;
-      --red: #dc2626;
+      --red: #e11d48;
       --purple: #7c3aed;
-      --code-bg: #f1f5f9;
+      --code-bg: rgba(241, 245, 249, 0.95);
       --sidebar-width: 280px;
     }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; transition: background 0.2s, border-color 0.2s; }
     
-    * { box-sizing: border-box; margin: 0; padding: 0; transition: background-color 0.2s, border-color 0.2s; }
+    /* Hide scrollbars globally across browsers while preserving scrollability */
+    html, body, aside, main, pre {
+      scrollbar-width: none; /* Firefox */
+      -ms-overflow-style: none; /* IE/Edge */
+    }
+    html::-webkit-scrollbar, body::-webkit-scrollbar, aside::-webkit-scrollbar, main::-webkit-scrollbar, pre::-webkit-scrollbar {
+      display: none; /* Chrome, Safari, Opera */
+    }
+
     body {
-      background-color: var(--bg);
+      background: var(--bg-gradient);
       color: var(--text);
       font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
       display: flex;
@@ -56,16 +66,22 @@
       overflow: hidden;
     }
 
+    .glass {
+      background: var(--panel);
+      backdrop-filter: blur(18px) saturate(180%);
+      -webkit-backdrop-filter: blur(18px) saturate(180%);
+      border: 1px solid var(--border);
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.25);
+    }
+
     header {
       position: fixed;
       top: 0; left: 0; right: 0;
       height: 64px;
-      background: var(--panel);
-      border-bottom: 1px solid var(--border);
+      padding: 0 28px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 0 28px;
       z-index: 100;
     }
     .logo {
@@ -79,18 +95,18 @@
       letter-spacing: -0.3px;
     }
     .badge {
-      background: rgba(56, 189, 248, 0.1);
+      background: rgba(56, 189, 248, 0.12);
       border: 1px solid rgba(56, 189, 248, 0.3);
       color: var(--accent);
-      padding: 2px 8px;
-      border-radius: 4px;
-      font-size: 0.75rem;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 0.72rem;
       font-weight: 600;
     }
     .header-right {
       display: flex;
       align-items: center;
-      gap: 14px;
+      gap: 12px;
     }
     .search-box {
       position: relative;
@@ -98,10 +114,10 @@
     }
     .search-box input {
       width: 100%;
-      background: var(--bg);
+      background: var(--card-bg);
       border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 6px 12px 6px 32px;
+      border-radius: 20px;
+      padding: 6px 14px 6px 34px;
       color: var(--text);
       font-size: 0.82rem;
       outline: none;
@@ -109,7 +125,7 @@
     .search-box input:focus { border-color: var(--accent); }
     .search-box svg {
       position: absolute;
-      left: 10px; top: 50%;
+      left: 12px; top: 50%;
       transform: translateY(-50%);
       width: 14px; height: 14px;
       stroke: var(--text-muted);
@@ -118,8 +134,8 @@
       background: var(--card-bg);
       border: 1px solid var(--border);
       color: var(--text);
-      padding: 6px 12px;
-      border-radius: 6px;
+      padding: 6px 14px;
+      border-radius: 20px;
       text-decoration: none;
       font-size: 0.82rem;
       font-weight: 500;
@@ -139,71 +155,83 @@
 
     aside {
       width: var(--sidebar-width);
-      background: var(--panel);
-      border-right: 1px solid var(--border);
-      padding: 24px 18px;
+      padding: 24px 16px;
       overflow-y: auto;
       display: flex;
       flex-direction: column;
-      gap: 24px;
+      gap: 20px;
     }
     .menu-group-title {
-      font-size: 0.75rem;
+      font-size: 0.72rem;
       font-weight: 700;
       color: var(--text-muted);
       text-transform: uppercase;
-      letter-spacing: 0.6px;
-      margin-bottom: 8px;
-      padding-left: 8px;
+      letter-spacing: 0.8px;
+      margin-bottom: 6px;
+      padding-left: 10px;
     }
     .menu-item {
       display: block;
       color: var(--text-muted);
       text-decoration: none;
-      font-size: 0.88rem;
-      padding: 7px 12px;
-      border-radius: 6px;
+      font-size: 0.85rem;
+      padding: 8px 12px;
+      border-radius: 8px;
       transition: all 0.15s;
+      cursor: pointer;
     }
     .menu-item:hover, .menu-item.active {
-      background: rgba(56, 189, 248, 0.1);
+      background: rgba(56, 189, 248, 0.12);
       color: var(--accent);
       font-weight: 600;
     }
 
     main {
       flex: 1;
-      padding: 48px 80px;
+      padding: 40px 60px;
       overflow-y: auto;
-      max-width: 1100px;
+      max-width: 1000px;
     }
 
-    h1 { font-size: 2.4rem; font-weight: 800; margin-bottom: 12px; letter-spacing: -0.6px; line-height: 1.2; }
-    h2 { font-size: 1.45rem; font-weight: 700; margin-top: 40px; margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
-    h3 { font-size: 1.1rem; font-weight: 600; margin-top: 24px; margin-bottom: 10px; color: var(--accent); }
-    p { font-size: 0.95rem; line-height: 1.7; color: var(--text-muted); margin-bottom: 16px; }
+    /* Page View Tab Controller */
+    .tab-page {
+      display: none;
+      animation: fadeIn 0.25s ease-in-out forwards;
+    }
+    .tab-page.active {
+      display: block;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    h1 { font-size: 2.2rem; font-weight: 800; margin-bottom: 12px; letter-spacing: -0.6px; line-height: 1.25; }
+    h2 { font-size: 1.35rem; font-weight: 700; margin-top: 32px; margin-bottom: 14px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+    h3 { font-size: 1.05rem; font-weight: 600; margin-top: 20px; margin-bottom: 8px; color: var(--accent); }
+    p { font-size: 0.92rem; line-height: 1.7; color: var(--text-muted); margin-bottom: 16px; }
 
     .hero-banner {
-      background: linear-gradient(135deg, rgba(56, 189, 248, 0.08) 0%, rgba(139, 92, 246, 0.08) 100%);
+      background: linear-gradient(135deg, rgba(56, 189, 248, 0.1) 0%, rgba(168, 85, 247, 0.1) 100%);
       border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 32px;
-      margin-bottom: 32px;
+      border-radius: 12px;
+      padding: 28px;
+      margin-bottom: 28px;
     }
-    .hero-title { font-size: 1.6rem; font-weight: 700; margin-bottom: 8px; color: var(--text); }
-    .hero-sub { font-size: 0.95rem; color: var(--text-muted); line-height: 1.6; }
+    .hero-title { font-size: 1.5rem; font-weight: 700; margin-bottom: 8px; color: var(--text); }
+    .hero-sub { font-size: 0.92rem; color: var(--text-muted); line-height: 1.6; }
 
     .code-block {
       position: relative;
-      margin-bottom: 24px;
+      margin-bottom: 20px;
     }
     pre {
       background: var(--code-bg);
       border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 18px 20px;
+      border-radius: 10px;
+      padding: 16px 20px;
       font-family: 'JetBrains Mono', monospace;
-      font-size: 0.85rem;
+      font-size: 0.84rem;
       overflow-x: auto;
       line-height: 1.55;
       color: var(--text);
@@ -211,12 +239,12 @@
     .copy-btn {
       position: absolute;
       top: 10px; right: 10px;
-      background: var(--panel);
+      background: var(--card-bg);
       border: 1px solid var(--border);
       color: var(--text-muted);
-      padding: 4px 8px;
-      border-radius: 4px;
-      font-size: 0.75rem;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 0.72rem;
       cursor: pointer;
       display: flex;
       align-items: center;
@@ -227,36 +255,46 @@
     table {
       width: 100%;
       border-collapse: collapse;
-      margin-bottom: 28px;
-      font-size: 0.88rem;
+      margin-bottom: 24px;
+      font-size: 0.85rem;
     }
     th, td {
       border: 1px solid var(--border);
-      padding: 12px 16px;
+      padding: 10px 14px;
       text-align: left;
     }
     th { background: var(--card-bg); color: var(--accent); font-weight: 600; }
 
     .callout {
-      background: rgba(56, 189, 248, 0.06);
+      background: rgba(56, 189, 248, 0.08);
       border-left: 4px solid var(--accent);
-      padding: 16px 20px;
-      border-radius: 4px;
-      margin-bottom: 28px;
-      font-size: 0.9rem;
-      line-height: 1.6;
+      padding: 14px 18px;
+      border-radius: 6px;
+      margin-bottom: 24px;
+      font-size: 0.88rem;
+      line-height: 1.65;
     }
 
-    svg.icon { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    ul, ol {
+      margin-left: 20px;
+      margin-bottom: 16px;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      line-height: 1.65;
+    }
+    li { margin-bottom: 6px; }
+
+    svg.icon { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
   </style>
 </head>
 <body>
 
-  <header>
+  <!-- Header -->
+  <header class="glass">
     <a href="#" class="logo">
       <svg class="icon" style="width:20px; height:20px; stroke: var(--accent);" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
       api-quick
-      <span class="badge">v1.0.0 Online Docs</span>
+      <span class="badge">v1.0.0 Online Documentation</span>
     </a>
     <div class="header-right">
       <div class="search-box">
@@ -267,179 +305,367 @@
         <svg class="icon" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
         <span id="themeLabel">Dark</span>
       </button>
-      <a href="https://www.npmjs.com/package/@skjuve/api-quick" target="_blank" class="btn-secondary">NPM</a>
+      <a href="https://www.npmjs.com/package/@skjuve/api-quick" target="_blank" class="btn-secondary">NPM Registry</a>
       <a href="https://github.com/SKJUV/api-quick" target="_blank" class="btn-secondary" style="color: var(--accent); border-color: rgba(56, 189, 248, 0.4);">GitHub</a>
     </div>
   </header>
 
   <div class="doc-layout">
-    <aside>
+    <!-- Left Navigation Sidebar -->
+    <aside class="glass">
       <div>
         <div class="menu-group-title">Getting Started</div>
-        <a href="#overview" class="menu-item active">Overview & Vision</a>
-        <a href="#installation" class="menu-item">Installation Guide</a>
-        <a href="#quickstart" class="menu-item">Quick Start Commands</a>
+        <a class="menu-item active" data-tab="tab-overview">Overview & Architecture</a>
+        <a class="menu-item" data-tab="tab-installation">Installation Guide</a>
+        <a class="menu-item" data-tab="tab-quickstart">Command Matrix</a>
       </div>
 
       <div>
         <div class="menu-group-title">Core Engines</div>
-        <a href="#ast-sniffer" class="menu-item">Polyglot AST Sniffer</a>
-        <a href="#e2e-workflow" class="menu-item">E2E Workflow Chaining</a>
-        <a href="#load-benchmark" class="menu-item">Load Benchmark Engine</a>
-        <a href="#mock-server" class="menu-item">Zero-Latency Mock Server</a>
-        <a href="#json-diff" class="menu-item">Structural JSON Diff</a>
+        <a class="menu-item" data-tab="tab-ast-sniffer">Polyglot AST Sniffer</a>
+        <a class="menu-item" data-tab="tab-e2e-workflow">E2E Workflow Runner</a>
+        <a class="menu-item" data-tab="tab-load-benchmark">Load Benchmark Engine</a>
+        <a class="menu-item" data-tab="tab-mock-server">Zero-Latency Mock Server</a>
+        <a class="menu-item" data-tab="tab-json-diff">Structural JSON Diff</a>
       </div>
 
       <div>
         <div class="menu-group-title">Interfaces & CI/CD</div>
-        <a href="#web-workbench" class="menu-item">Web GUI Workbench</a>
-        <a href="#transpiler" class="menu-item">Code Transpiler (--to)</a>
-        <a href="#ci-assertions" class="menu-item">CI/CD Assertions</a>
+        <a class="menu-item" data-tab="tab-web-workbench">Web GUI Workbench</a>
+        <a class="menu-item" data-tab="tab-transpiler">Code Transpiler (--to)</a>
+        <a class="menu-item" data-tab="tab-ci-assertions">CI/CD Assertions</a>
+        <a class="menu-item" data-tab="tab-troubleshooting">Troubleshooting</a>
       </div>
     </aside>
 
+    <!-- Main Content Area: Dedicated Page Views (No Visible Scrollbar) -->
     <main>
-      <section id="overview">
+      
+      <!-- TAB 1: OVERVIEW & ARCHITECTURE -->
+      <div id="tab-overview" class="tab-page active">
         <div class="hero-banner">
-          <div class="hero-title">api-quick Documentation Platform</div>
-          <div class="hero-sub">High-Performance Multi-Interface HTTP Engine, Polyglot AST Route Sniffer & CI/CD Automation Workbench.</div>
+          <div class="hero-title">api-quick Technical Platform</div>
+          <div class="hero-sub">High-Performance Multi-Interface HTTP Engine, Polyglot AST Route Sniffer, E2E Workflow Runner & CI/CD Automation Workbench.</div>
         </div>
 
-        <p><strong>api-quick</strong> is a zero-dependency, polyglot API workbench designed for software engineers, backend developers, and automated testing pipelines.</p>
+        <h1>Platform Overview</h1>
+        <p><strong>api-quick</strong> is a zero-dependency, polyglot API workbench engineered to combine the raw speed of terminal utilities (<code>curl</code> / <code>httpie</code>) with the visual depth of interactive workbenches (<code>Postman</code> / <code>Insomnia</code>).</p>
         
         <div class="callout">
-          <strong>Key Architectural Difference:</strong>  
-          This online documentation platform provides comprehensive technical guides, API references, and CI integration standards. The local embedded workbench (launched via <code>api-quick web</code>) provides live proxy execution, automatic JWT token capture, and workspace AST scanning.
-        </div>
-      </section>
-
-      <section id="installation">
-        <h2>Installation Guide</h2>
-        <p>Install <code>@skjuve/api-quick</code> globally via NPM or execute instantly using NPX:</p>
-
-        <h3>Global Installation (Recommended)</h3>
-        <div class="code-block">
-          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-          <pre><code>npm install -g @skjuve/api-quick</code></pre>
+          <strong>Architecture Design:</strong>  
+          This online documentation platform delivers comprehensive technical specifications, CLI flags, and CI pipeline setup. The local embedded workbench (launched via <code>api-quick web</code>) provides live proxy execution, automatic JWT token capture, and workspace AST scanning.
         </div>
 
-        <h3>Instant Zero-Installation Execution</h3>
-        <div class="code-block">
-          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-          <pre><code>npx @skjuve/api-quick web</code></pre>
-        </div>
-      </section>
-
-      <section id="quickstart">
-        <h2>Quick Start Commands</h2>
-        
+        <h2>System Architecture</h2>
         <table>
           <thead>
             <tr>
-              <th>Command</th>
+              <th>Layer</th>
+              <th>Technologies</th>
               <th>Description</th>
             </tr>
           </thead>
           <tbody>
             <tr>
-              <td><code>api-quick web [--port 4000]</code></td>
-              <td>Launch Web UI Workbench with CORS bypass proxy</td>
+              <td><strong>CLI Runtime</strong></td>
+              <td>TypeScript / Node.js 20+ / Hono</td>
+              <td>Sub-10ms cold start engine with ANSI color formatting and POSIX exit codes.</td>
+            </tr>
+            <tr>
+              <td><strong>AST Sniffer</strong></td>
+              <td>Regex AST Scanner</td>
+              <td>Statically inspects source code across 8 backend frameworks without execution.</td>
+            </tr>
+            <tr>
+              <td><strong>CORS Proxy</strong></td>
+              <td>Hono Web Server</td>
+              <td>Local HTTP server on port 4000 bypassing CORS restrictions for browser testing.</td>
+            </tr>
+            <tr>
+              <td><strong>E2E Workflows</strong></td>
+              <td>WorkflowEngine</td>
+              <td>Sequential multi-step request chaining with JSONPath token interpolation.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- TAB 2: INSTALLATION GUIDE -->
+      <div id="tab-installation" class="tab-page">
+        <h1>Installation Guide</h1>
+        <p>You can install <code>@skjuve/api-quick</code> globally via NPM or execute commands instantly using NPX or Bun.</p>
+
+        <h2>Global Installation via NPM (Recommended)</h2>
+        <p>Installs the global <code>api-quick</code> binary on your PATH:</p>
+        <div class="code-block">
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+          <pre><code>npm install -g @skjuve/api-quick</code></pre>
+        </div>
+
+        <h2>Instant Zero-Installation Execution via NPX</h2>
+        <p>Run any subcommand without installing global packages:</p>
+        <div class="code-block">
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+          <pre><code>npx @skjuve/api-quick web</code></pre>
+        </div>
+
+        <h2>Execution via Bun</h2>
+        <div class="code-block">
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+          <pre><code>bun install -g @skjuve/api-quick</code></pre>
+        </div>
+
+        <h2>Verification</h2>
+        <p>Verify that the installation was successful by running:</p>
+        <div class="code-block">
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+          <pre><code>api-quick --help</code></pre>
+        </div>
+      </div>
+
+      <!-- TAB 3: COMMAND MATRIX -->
+      <div id="tab-quickstart" class="tab-page">
+        <h1>Command Matrix & CLI Reference</h1>
+        <p>Comprehensive list of available subcommands and flags for <code>api-quick</code>:</p>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Command</th>
+              <th>Arguments</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>api-quick web</code></td>
+              <td><code>[--port 4000]</code></td>
+              <td>Launch Apple Liquid Glass Web UI Workbench & CORS Proxy</td>
             </tr>
             <tr>
               <td><code>api-quick tui</code></td>
-              <td>Launch interactive Terminal UI workbench</td>
+              <td>None</td>
+              <td>Launch full interactive Terminal UI workbench</td>
             </tr>
             <tr>
-              <td><code>api-quick sniff [dir]</code></td>
-              <td>Scan local source code AST for API routes</td>
+              <td><code>api-quick sniff</code></td>
+              <td><code>[dir]</code></td>
+              <td>Scan local source code AST for API routes across 8 frameworks</td>
             </tr>
             <tr>
-              <td><code>api-quick bench &lt;url&gt; -n 100 -c 10</code></td>
-              <td>Run high-throughput HTTP load benchmark</td>
+              <td><code>api-quick bench</code></td>
+              <td><code>&lt;url&gt; -n 100 -c 10</code></td>
+              <td>Run high-throughput concurrent load benchmark</td>
             </tr>
             <tr>
-              <td><code>api-quick mock [--port 8080]</code></td>
+              <td><code>api-quick mock</code></td>
+              <td><code>[--port 8080]</code></td>
               <td>Launch zero-latency AST mock API server</td>
             </tr>
             <tr>
-              <td><code>api-quick diff &lt;url1&gt; &lt;url2&gt;</code></td>
+              <td><code>api-quick diff</code></td>
+              <td><code>&lt;url1&gt; &lt;url2&gt;</code></td>
               <td>Visual structural JSON diffing engine</td>
             </tr>
           </tbody>
         </table>
-      </section>
 
-      <section id="ast-sniffer">
-        <h2>Polyglot AST Route Sniffer</h2>
-        <p><code>api-quick</code> inspects local backend source code statically (without running the application) to discover API routes across 8 major frameworks:</p>
-        <ul>
-          <li><strong>Express.js / Node.js</strong> (app.get, router.post, module mount prefixes)</li>
-          <li><strong>NestJS</strong> (@Get, @Post, @Controller)</li>
-          <li><strong>Next.js</strong> (App & Pages Router)</li>
-          <li><strong>FastAPI & Flask (Python)</strong></li>
-          <li><strong>Django REST Framework</strong></li>
-          <li><strong>Go Gin / Fiber</strong></li>
-          <li><strong>Spring Boot (Java/Kotlin)</strong></li>
-          <li><strong>Laravel (PHP)</strong></li>
-        </ul>
+        <h2>CLI Request Examples</h2>
         <div class="code-block">
           <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-          <pre><code>api-quick sniff</code></pre>
+          <pre><code># Basic GET Request
+api-quick GET https://api.github.com/repos/SKJUV/api-quick
+
+# POST Request with form-encoded payload
+api-quick POST https://api.stripe.com/v1/charges amount=2000 currency=usd
+
+# POST Request with raw JSON payload
+api-quick POST https://api.example.com/users name:="Alice" role:="ADMIN"</code></pre>
         </div>
-      </section>
+      </div>
 
-      <section id="e2e-workflow">
-        <h2>E2E Workflow Chaining Engine</h2>
-        <p>Run automated multi-step request sequences with automatic JWT Bearer token capture and variable propagation across dependent steps.</p>
-      </section>
+      <!-- TAB 4: POLYGLOT AST SNIFFER -->
+      <div id="tab-ast-sniffer" class="tab-page">
+        <h1>Polyglot AST Route Sniffer</h1>
+        <p>The AST Sniffer inspects backend source code statically without executing code, extracting routes, pre-filling JSON bodies, and grouping routes by OpenAPI tags.</p>
 
-      <section id="load-benchmark">
-        <h2>High-Throughput Load Benchmark Engine</h2>
-        <p>Simulate concurrent HTTP worker pools directly from CLI or Web UI to measure requests per second and latency percentiles (p50, p95, p99).</p>
+        <h2>Supported Frameworks</h2>
+        <ul>
+          <li><strong>Express.js / Node.js</strong>: Scans <code>app.get()</code>, <code>router.post()</code>, and Express sub-router mount prefixes (e.g. <code>app.use('/api/v1/admin', adminRoutes)</code>).</li>
+          <li><strong>NestJS</strong>: Scans <code>@Get()</code>, <code>@Post()</code>, <code>@Controller('prefix')</code>, and DTO body decorators.</li>
+          <li><strong>Next.js</strong>: Scans App Router <code>route.ts</code> exports (GET, POST) and Pages Router API routes.</li>
+          <li><strong>FastAPI & Flask (Python)</strong>: Scans <code>@app.get()</code>, <code>@router.post()</code>.</li>
+          <li><strong>Django REST Framework</strong>: Scans <code>urlpatterns</code> and <code>@api_view()</code> decorators.</li>
+          <li><strong>Go Gin & Fiber</strong>: Scans <code>r.GET()</code>, <code>router.POST()</code>.</li>
+          <li><strong>Spring Boot (Java/Kotlin)</strong>: Scans <code>@GetMapping</code>, <code>@PostMapping</code>, <code>@RestController</code>.</li>
+          <li><strong>Laravel (PHP)</strong>: Scans <code>Route::get()</code>, <code>Route::post()</code> in <code>routes/api.php</code>.</li>
+        </ul>
+
+        <h2>Execution Command</h2>
+        <div class="code-block">
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+          <pre><code>api-quick sniff ./src</code></pre>
+        </div>
+      </div>
+
+      <!-- TAB 5: E2E WORKFLOW RUNNER -->
+      <div id="tab-e2e-workflow" class="tab-page">
+        <h1>E2E Workflow Chaining Engine</h1>
+        <p>The E2E Workflow engine executes sequential multi-step request flows, automatically extracting JWT tokens and intermediate variables for seamless end-to-end testing.</p>
+
+        <h2>Workflow Features</h2>
+        <ul>
+          <li><strong>JWT Token Auto-Capture</strong>: Automatically extracts token keys (<code>token</code>, <code>accessToken</code>, <code>access_token</code>) from step responses.</li>
+          <li><strong>Variable Interpolation</strong>: Pass dynamic variables like <code>{{authToken}}</code> or <code>{{userId}}</code> between steps.</li>
+          <li><strong>Execution Ordering</strong>: Automatically sorts steps by identity dependency (Auth $\rightarrow$ Profile $\rightarrow$ Workflows $\rightarrow$ Admin Ops).</li>
+        </ul>
+
+        <h2>Example Scenario Structure</h2>
+        <div class="code-block">
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+          <pre><code>Step 1: POST /api/v1/auth/sync  -> Captures {{authToken}}
+Step 2: GET  /api/v1/auth/me    -> Injects Header Authorization: Bearer {{authToken}}
+Step 3: GET  /api/v1/admin/dashboard -> Verifies Admin access</code></pre>
+        </div>
+      </div>
+
+      <!-- TAB 6: LOAD BENCHMARK ENGINE -->
+      <div id="tab-load-benchmark" class="tab-page">
+        <h1>High-Throughput Load Benchmark Engine</h1>
+        <p>The benchmark engine spawns worker pools to measure backend request throughput and percentile latencies under load.</p>
+
+        <h2>Calculated Metrics</h2>
+        <ul>
+          <li><strong>Requests Per Second (Req/sec)</strong></li>
+          <li><strong>Latency Percentiles</strong>: p50 (median), p95 (95th percentile), p99 (99th percentile)</li>
+          <li><strong>Latency Range</strong>: Min, Average, Max latency in milliseconds</li>
+          <li><strong>Success / Failure Count</strong>: HTTP status 2xx vs 4xx/5xx count</li>
+        </ul>
+
+        <h2>CLI Benchmark Execution</h2>
         <div class="code-block">
           <button class="copy-btn" onclick="copyCode(this)">Copy</button>
           <pre><code>api-quick bench http://localhost:4000/api/v1/auth/me -n 500 -c 20</code></pre>
         </div>
-      </section>
+      </div>
 
-      <section id="mock-server">
-        <h2>Zero-Latency Mock Server</h2>
-        <p>Start a virtual Hono API mock server on port 8080 responding to all sniffed AST routes with structured mock JSON data.</p>
+      <!-- TAB 7: ZERO-LATENCY MOCK SERVER -->
+      <div id="tab-mock-server" class="tab-page">
+        <h1>Zero-Latency Mock Server</h1>
+        <p>The mock server engine creates a virtual Hono HTTP server on port 8080 responding dynamically to all sniffed AST routes with structured JSON data when backend servers are stopped.</p>
+
+        <h2>CLI Execution</h2>
         <div class="code-block">
           <button class="copy-btn" onclick="copyCode(this)">Copy</button>
           <pre><code>api-quick mock --port 8080</code></pre>
         </div>
-      </section>
 
-      <section id="json-diff">
-        <h2>Structural JSON Diff Engine</h2>
-        <p>Compare JSON response structures recursively between local and staging/production environments to detect breaking API changes.</p>
+        <h2>Mock Status Verification</h2>
+        <div class="code-block">
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+          <pre><code>curl http://localhost:8080/_mock/status</code></pre>
+        </div>
+      </div>
+
+      <!-- TAB 8: STRUCTURAL JSON DIFF ENGINE -->
+      <div id="tab-json-diff" class="tab-page">
+        <h1>Structural JSON Diff Engine</h1>
+        <p>Recursively compares JSON response structures between local, staging, and production API endpoints to highlight schema drift or missing keys.</p>
+
+        <h2>CLI Execution</h2>
         <div class="code-block">
           <button class="copy-btn" onclick="copyCode(this)">Copy</button>
           <pre><code>api-quick diff http://localhost:4000/api/v1/products https://staging.api.com/v1/products</code></pre>
         </div>
-      </section>
+      </div>
 
-      <section id="transpiler">
-        <h2>Code Transpiler (--to)</h2>
-        <p>Transpile live CLI requests into production-ready code in 8 languages:</p>
+      <!-- TAB 9: WEB GUI WORKBENCH -->
+      <div id="tab-web-workbench" class="tab-page">
+        <h1>Web GUI Workbench</h1>
+        <p>The local Web UI launched via <code>api-quick web</code> features an Apple Liquid Glass translucent aesthetic, zero-CORS proxy server, and interactive controls.</p>
+
+        <h2>Key Capabilities</h2>
+        <ul>
+          <li><strong>Theme Switcher</strong>: Toggle between Liquid Dark, Light, and OLED themes.</li>
+          <li><strong>Active Backend Port Auto-Probing</strong>: Automatically detects running backend servers (ports 3000, 4000, 5000, 8080).</li>
+          <li><strong>Security Level Filtering</strong>: Filter discovered AST routes by <code>🔒 Token Required</code> vs <code>🔓 Public</code>.</li>
+          <li><strong>Auth Guide Modal</strong>: Interactive modal explaining token response keys for Express, NestJS, FastAPI, Django, and Laravel.</li>
+        </ul>
+      </div>
+
+      <!-- TAB 10: CODE TRANSPILER -->
+      <div id="tab-transpiler" class="tab-page">
+        <h1>Universal Polyglot Code Transpiler (--to)</h1>
+        <p>Transpile any live CLI request directly into production code in 8 languages:</p>
+
         <div class="code-block">
           <button class="copy-btn" onclick="copyCode(this)">Copy</button>
           <pre><code>api-quick POST https://api.stripe.com/v1/charges amount=2000 --to python</code></pre>
         </div>
-      </section>
 
-      <section id="ci-assertions">
-        <h2>CI/CD Assertion DSL</h2>
-        <p>Run zero-dependency automated API assertions in GitHub Actions pipelines with POSIX exit code alignment:</p>
+        <h2>Generated Python Code Output</h2>
+        <div class="code-block">
+          <pre><code>import requests
+
+url = "https://api.stripe.com/v1/charges"
+payload = {"amount": "2000"}
+headers = {"Content-Type": "application/x-www-form-urlencoded"}
+
+response = requests.post(url, data=payload, headers=headers)
+print(response.status_code)
+print(response.json())</code></pre>
+        </div>
+      </div>
+
+      <!-- TAB 11: CI/CD ASSERTIONS -->
+      <div id="tab-ci-assertions" class="tab-page">
+        <h1>CI/CD Assertion DSL & GitHub Actions</h1>
+        <p>Run zero-dependency automated API tests in CI/CD pipelines with POSIX exit code alignment.</p>
+
+        <h2>Assertion Flags</h2>
+        <ul>
+          <li><code>--expect-status &lt;code&gt;</code>: Assert HTTP status code (e.g. 200)</li>
+          <li><code>--expect-max-time &lt;ms&gt;</code>: Assert maximum latency (e.g. 150ms)</li>
+          <li><code>--expect-json &lt;path=val&gt;</code>: Assert JSONPath equality (e.g. $.status = OK)</li>
+        </ul>
+
+        <h2>GitHub Actions Pipeline Example</h2>
         <div class="code-block">
           <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-          <pre><code>api-quick GET https://api.example.com/health \
-  --expect-status 200 \
-  --expect-max-time 150ms \
-  --expect-json "$.status" = "OK"</code></pre>
+          <pre><code>name: API Integration Tests
+on: [push]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install -g @skjuve/api-quick
+      - run: api-quick GET https://api.example.com/health --expect-status 200 --expect-max-time 200ms</code></pre>
         </div>
-      </section>
+      </div>
+
+      <!-- TAB 12: TROUBLESHOOTING -->
+      <div id="tab-troubleshooting" class="tab-page">
+        <h1>Troubleshooting & Diagnostic Guide</h1>
+        
+        <h2>Common Scenarios & Solutions</h2>
+        
+        <h3>1. HTTP 401 Unauthorized / Token Manquant</h3>
+        <p><strong>Cause:</strong> The endpoint requires Bearer authentication, but no token was supplied.</p>
+        <p><strong>Solution:</strong> Execute <code>POST /api/v1/auth/sync</code> (or your login endpoint) in the Web UI to auto-capture the JWT token into the Bearer token bar.</p>
+
+        <h3>2. HTTP 404 Route Not Found</h3>
+        <p><strong>Cause:</strong> The route path contains a module mount prefix or singular name (e.g. <code>/api/v1/product/products</code> instead of <code>/products</code>).</p>
+        <p><strong>Solution:</strong> Use the left sidebar catalog in <code>api-quick web</code> or run <code>api-quick sniff</code> to see exact AST route paths.</p>
+
+        <h3>3. Port Conflict</h3>
+        <p><strong>Cause:</strong> Port 4000 is already in use by your backend server.</p>
+        <p><strong>Solution:</strong> <code>api-quick web</code> automatically detects port conflicts and switches to an available port (e.g. port 4001).</p>
+      </div>
+
     </main>
   </div>
 
@@ -448,6 +674,7 @@
     const themeLabel = document.getElementById('themeLabel');
     const docSearch = document.getElementById('docSearch');
     const menuItems = document.querySelectorAll('.menu-item');
+    const tabPages = document.querySelectorAll('.tab-page');
     const themes = ['dark', 'light'];
     let themeIdx = 0;
 
@@ -458,6 +685,20 @@
       themeLabel.textContent = nextTheme.toUpperCase();
     });
 
+    // Multi-Page Tab Controller
+    menuItems.forEach(item => {
+      item.addEventListener('click', function() {
+        const targetTab = this.getAttribute('data-tab');
+        
+        menuItems.forEach(m => m.classList.remove('active'));
+        tabPages.forEach(p => p.classList.remove('active'));
+
+        this.classList.add('active');
+        const activePage = document.getElementById(targetTab);
+        if (activePage) activePage.classList.add('active');
+      });
+    });
+
     function copyCode(btn) {
       const code = btn.nextElementSibling.innerText;
       navigator.clipboard.writeText(code);
@@ -466,17 +707,16 @@
     }
 
     docSearch.addEventListener('input', (e) => {
-      const query = e.target.value.toLowerCase();
-      document.querySelectorAll('main section').forEach(sec => {
-        const text = sec.innerText.toLowerCase();
-        sec.style.display = text.includes(query) ? 'block' : 'none';
-      });
-    });
+      const query = e.target.value.toLowerCase().trim();
+      if (!query) return;
 
-    menuItems.forEach(item => {
-      item.addEventListener('click', function() {
-        menuItems.forEach(m => m.classList.remove('active'));
-        this.classList.add('active');
+      menuItems.forEach(item => {
+        const tabId = item.getAttribute('data-tab');
+        const page = document.getElementById(tabId);
+        if (page) {
+          const match = page.innerText.toLowerCase().includes(query) || item.innerText.toLowerCase().includes(query);
+          item.style.display = match ? 'block' : 'none';
+        }
       });
     });
   </script>
