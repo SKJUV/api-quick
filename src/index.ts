@@ -4,6 +4,8 @@ import { formatError, formatResponse } from "./cli/formatter.js";
 import { evaluateAssertions, POSIX_EXIT_CODES } from "./cli/assertions.js";
 import { transpileToCode } from "./core/transpiler.js";
 import { launchTuiMode } from "./cli/tui.js";
+import { createWebServer } from "./server/app.js";
+import { serve } from "@hono/node-server";
 
 async function main() {
   const rawArgs = process.argv.slice(2);
@@ -59,8 +61,22 @@ async function main() {
   }
 
   if (firstCommand === "web") {
-    console.log(`\x1b[1m\x1b[36m⚡ Starting api-quick Web Workbench & CORS Proxy Server on http://localhost:4000...\x1b[0m`);
-    process.exit(0);
+    let port = 4000;
+    const portIdx = rawArgs.indexOf("--port");
+    if (portIdx !== -1 && rawArgs[portIdx + 1]) {
+      port = parseInt(rawArgs[portIdx + 1], 10);
+    }
+
+    const app = createWebServer();
+    console.log(`\n\x1b[1m\x1b[36m⚡ Launching api-quick Web Workbench & CORS Proxy Server...\x1b[0m`);
+    console.log(`\x1b[32m✔ Server running at:\x1b[0m \x1b[1mhttp://localhost:${port}\x1b[0m`);
+    console.log(`\x1b[90m(Press Ctrl+C to stop)\x1b[0m\n`);
+
+    serve({
+      fetch: app.fetch,
+      port
+    });
+    return;
   }
 
   if (firstCommand === "mock") {
