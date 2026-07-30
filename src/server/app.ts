@@ -27,15 +27,22 @@ export function createWebServer(currentPort: number = 4000) {
   // Health check endpoint
   app.get("/api/health", (c) => c.json({ status: "ok", engine: "api-quick", version: "0.1.0" }));
 
-  // Discovered routes AST endpoint
+  // Discovered routes AST endpoint with deduplication
   app.get("/api/routes", (c) => {
-    const routes = sniffProjectRoutes();
-    return c.json({ routes, count: routes.length });
+    const rawRoutes = sniffProjectRoutes();
+    const seen = new Set<string>();
+    const deduplicatedRoutes = rawRoutes.filter(r => {
+      const key = `${r.method}:${r.path}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    return c.json({ routes: deduplicatedRoutes, count: deduplicatedRoutes.length });
   });
 
   // Probe active local ports to find running backend (EXCLUDING api-quick's own port!)
   app.get("/api/probe-ports", async (c) => {
-    const candidatePorts = [3000, 3001, 5000, 5001, 8080, 8000, 9000, 3002];
+    const candidatePorts = [3000, 4000, 5000, 8080, 8000, 3001, 5001, 9000, 3002];
     const activePorts: number[] = [];
 
     for (const port of candidatePorts) {
@@ -138,7 +145,7 @@ export function createWebServer(currentPort: number = 4000) {
         statusText: "Bad Gateway",
         durationMs: totalTime,
         responseSize: 0,
-        responseBody: `Connection Refused to ${targetUrl}. Please ensure target backend server is running.`
+        responseBody: `Connection Refused to ${targetUrl}. Is your backend server running on this port?`
       });
 
       return c.json({ error: `Proxy Request Failed: Connection Refused to ${targetUrl}. Is your backend server running on this port?` }, 502);
@@ -155,7 +162,7 @@ export function createWebServer(currentPort: number = 4000) {
 
 function getWebUiHtml(): string {
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -164,7 +171,7 @@ function getWebUiHtml(): string {
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
-    :root {
+    :root[data-theme="dark"] {
       --bg: #090d16;
       --panel: #131b2e;
       --card-bg: #182238;
@@ -179,8 +186,44 @@ function getWebUiHtml(): string {
       --yellow: #f59e0b;
       --red: #ef4444;
       --purple: #8b5cf6;
+      --input-bg: #0c1220;
     }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+    :root[data-theme="light"] {
+      --bg: #f8fafc;
+      --panel: #ffffff;
+      --card-bg: #f1f5f9;
+      --border: #cbd5e1;
+      --border-hover: #94a3b8;
+      --text: #0f172a;
+      --text-muted: #64748b;
+      --primary: #0284c7;
+      --primary-hover: #0369a1;
+      --accent: #0284c7;
+      --green: #059669;
+      --yellow: #d97706;
+      --red: #dc2626;
+      --purple: #7c3aed;
+      --input-bg: #ffffff;
+    }
+    :root[data-theme="oled"] {
+      --bg: #000000;
+      --panel: #0a0a0a;
+      --card-bg: #121212;
+      --border: #262626;
+      --border-hover: #404040;
+      --text: #ffffff;
+      --text-muted: #a3a3a3;
+      --primary: #38bdf8;
+      --primary-hover: #0284c7;
+      --accent: #38bdf8;
+      --green: #22c55e;
+      --yellow: #eab308;
+      --red: #ef4444;
+      --purple: #a855f7;
+      --input-bg: #000000;
+    }
+    
+    * { box-sizing: border-box; margin: 0; padding: 0; transition: background-color 0.2s, border-color 0.2s; }
     body {
       background-color: var(--bg);
       color: var(--text);
@@ -215,6 +258,11 @@ function getWebUiHtml(): string {
       border-radius: 4px;
       font-size: 0.75rem;
       font-weight: 600;
+    }
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 14px;
     }
     .status-indicator {
       display: flex;
@@ -273,7 +321,7 @@ function getWebUiHtml(): string {
       overflow: hidden;
     }
     .card-header {
-      background: rgba(0,0,0,0.25);
+      background: rgba(0,0,0,0.15);
       padding: 10px 14px;
       border-bottom: 1px solid var(--border);
       font-size: 0.85rem;
@@ -290,7 +338,7 @@ function getWebUiHtml(): string {
     }
     .search-input-box input {
       width: 100%;
-      background: #0d1322;
+      background: var(--input-bg);
       border: 1px solid var(--border);
       border-radius: 4px;
       padding: 6px 10px;
@@ -316,7 +364,7 @@ function getWebUiHtml(): string {
     }
     .route-item:hover {
       border-color: var(--accent);
-      background: #1e2c48;
+      transform: translateY(-1px);
     }
     .route-top {
       display: flex;
@@ -365,7 +413,7 @@ function getWebUiHtml(): string {
       font-size: 0.85rem;
       border-radius: 4px;
       border: 1px solid var(--border);
-      background: #0c1220;
+      background: var(--input-bg);
       color: var(--text);
       padding: 8px 10px;
     }
@@ -409,7 +457,7 @@ function getWebUiHtml(): string {
       padding: 4px 10px;
       font-size: 0.78rem;
     }
-    button.btn-secondary:hover { border-color: var(--border-hover); background: #22304d; }
+    button.btn-secondary:hover { border-color: var(--border-hover); }
 
     .form-group {
       padding: 10px 12px;
@@ -439,7 +487,7 @@ function getWebUiHtml(): string {
       overflow: auto;
       flex: 1;
       white-space: pre-wrap;
-      background: #0c1220;
+      background: var(--input-bg);
       line-height: 1.45;
     }
     .status-tag {
@@ -495,9 +543,15 @@ function getWebUiHtml(): string {
       api-quick
       <span class="badge">v0.1.0 Engine</span>
     </div>
-    <div class="status-indicator">
-      <div class="dot-active"></div>
-      CORS Bypass Proxy & AST Scanner Active
+    <div class="header-right">
+      <div class="status-indicator">
+        <div class="dot-active"></div>
+        CORS Proxy & AST Scanner Active
+      </div>
+      <button id="themeToggleBtn" class="btn-secondary">
+        <svg class="icon" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <span id="themeLabel">Dark</span>
+      </button>
     </div>
   </header>
 
@@ -580,7 +634,7 @@ function getWebUiHtml(): string {
         </button>
       </div>
       <div id="logList" class="log-list">
-        <div style="padding: 14px; color: var(--text-muted); font-size: 0.8rem;">No execution logs recorded yet.</div>
+        <div style="padding: 14px; color: var(--text-muted); font-size: 0.8rem;">No execution logs recorded.</div>
       </div>
     </div>
   </div>
@@ -601,9 +655,20 @@ function getWebUiHtml(): string {
     const clearLogsBtn = document.getElementById('clearLogsBtn');
     const baseHostInput = document.getElementById('baseHostInput');
     const activePortsNotice = document.getElementById('activePortsNotice');
+    const themeToggleBtn = document.getElementById('themeToggleBtn');
+    const themeLabel = document.getElementById('themeLabel');
 
     let allRoutes = [];
     let allLogs = [];
+    const themes = ['dark', 'light', 'oled'];
+    let currentThemeIdx = 0;
+
+    themeToggleBtn.addEventListener('click', () => {
+      currentThemeIdx = (currentThemeIdx + 1) % themes.length;
+      const nextTheme = themes[currentThemeIdx];
+      document.documentElement.setAttribute('data-theme', nextTheme);
+      themeLabel.textContent = nextTheme.toUpperCase();
+    });
 
     async function probeActivePorts() {
       try {
@@ -611,11 +676,11 @@ function getWebUiHtml(): string {
         const data = await res.json();
         if (data.activePorts && data.activePorts.length > 0) {
           activePortsNotice.style.color = 'var(--green)';
-          activePortsNotice.textContent = 'Active backend port detected: ' + data.activePorts.join(', ');
+          activePortsNotice.textContent = '🟢 Active running backend detected on port: ' + data.activePorts[0];
           baseHostInput.value = 'http://localhost:' + data.activePorts[0];
         } else {
           activePortsNotice.style.color = 'var(--yellow)';
-          activePortsNotice.textContent = 'Specify running backend host above (e.g. http://localhost:3000)';
+          activePortsNotice.textContent = '⚠️ Start your backend server (e.g. node src/server.js on port 4000/3000/5000)';
         }
       } catch (e) {}
     }
