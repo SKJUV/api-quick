@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "cleanUrls": true,
+  "rewrites": [
+    {
+      "source": "/api-quick",
+      "destination": "/docs/index.html"
+    },
+    {
+      "source": "/api-quick/(.*)",
+      "destination": "/docs/$1"
+    },
+    {
+      "source": "/",
+      "destination": "/docs/index.html"
+    }
+  ]
+}
