@@ -33,6 +33,25 @@ export function createWebServer() {
     return c.json({ routes, count: routes.length });
   });
 
+  // Probe active local ports to find running backend
+  app.get("/api/probe-ports", async (c) => {
+    const commonPorts = [3000, 3001, 5000, 5001, 8080, 8000, 4000, 9000];
+    const activePorts: number[] = [];
+
+    for (const port of commonPorts) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 200);
+        const res = await fetch(`http://127.0.0.1:${port}`, { signal: controller.signal });
+        clearTimeout(timeoutId);
+        if (res.status) activePorts.push(port);
+      } catch {
+        // Port not active or refused
+      }
+    }
+    return c.json({ activePorts });
+  });
+
   // Action execution logs history endpoint
   app.get("/api/logs", (c) => {
     return c.json({ logs: executionLogs, count: executionLogs.length });
@@ -114,13 +133,13 @@ export function createWebServer() {
         method,
         url: targetUrl,
         status: 502,
-        statusText: "Bad Gateway / Connection Refused",
+        statusText: "Bad Gateway / Target Server Not Running",
         durationMs: totalTime,
         responseSize: 0,
-        responseBody: err.message
+        responseBody: `Connection Refused to ${targetUrl}. Is your backend server running on this port?`
       });
 
-      return c.json({ error: `Proxy Request Failed: ${err.message}` }, 502);
+      return c.json({ error: `Proxy Request Failed: Connection Refused to ${targetUrl}. Check if your backend is running on this port.` }, 502);
     }
   });
 
@@ -138,7 +157,7 @@ function getWebUiHtml(): string {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>⚡ api-quick - Vibe Coder Web Workbench & Activity Logs</title>
+  <title>⚡ api-quick - Vibe Coder Web Workbench</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -187,7 +206,7 @@ function getWebUiHtml(): string {
     main {
       flex: 2;
       display: grid;
-      grid-template-columns: 320px 1fr 1fr;
+      grid-template-columns: 340px 1fr 1fr;
       gap: 16px;
       overflow: hidden;
     }
@@ -230,6 +249,7 @@ function getWebUiHtml(): string {
     .method-GET { background: rgba(56, 189, 248, 0.2); color: var(--primary); }
     .method-POST { background: rgba(34, 197, 94, 0.2); color: var(--green); }
     .method-PUT { background: rgba(234, 179, 8, 0.2); color: var(--yellow); }
+    .method-PATCH { background: rgba(168, 85, 247, 0.2); color: var(--purple); }
     .method-DELETE { background: rgba(239, 68, 68, 0.2); color: var(--red); }
     .route-path, .log-url { font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; font-weight: 600; color: #fff; word-break: break-all; }
     .route-meta, .log-meta { font-size: 0.75rem; color: var(--muted); margin-top: 4px; display: flex; justify-content: space-between; }
@@ -274,7 +294,7 @@ function getWebUiHtml(): string {
 
     /* Bottom Activity Drawer */
     .activity-drawer {
-      height: 220px;
+      height: 200px;
       background: var(--panel);
       border: 1px solid var(--border);
       border-radius: 8px;
@@ -282,21 +302,37 @@ function getWebUiHtml(): string {
       flex-direction: column;
       overflow: hidden;
     }
+    .base-url-box {
+      background: #090d16;
+      border-bottom: 1px solid var(--border);
+      padding: 8px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 0.85rem;
+    }
   </style>
 </head>
 <body>
   <header>
     <div class="logo">⚡ api-quick <span class="badge">v0.1.0</span></div>
-    <div class="vibe-tag">✨ Vibe Coder Auto-Sniffing & Telemetry Logging Active</div>
+    <div class="vibe-tag">✨ Vibe Coder Auto-Sniffing & Telemetry Active</div>
     <div style="font-size: 0.85rem; color: var(--muted);">CORS Proxy: Active</div>
   </header>
 
   <div class="layout-container">
+    <!-- Config Bar for Backend Host & Port -->
+    <div class="base-url-box">
+      <span style="color: var(--muted); font-weight: 600;">🎯 Target Backend Base Host:</span>
+      <input type="text" id="baseHostInput" value="http://localhost:3000" style="max-width: 260px; padding: 4px 8px; font-size: 0.85rem;" />
+      <span id="activePortsNotice" style="color: var(--green); font-weight: 600; font-size: 0.8rem;"></span>
+    </div>
+
     <main>
       <!-- Left Sidebar: Discovered Routes Catalog -->
       <div class="card">
         <div class="card-header">
-          <span>Project AST Routes</span>
+          <span>Project AST Routes (<span id="routeCount">0</span>)</span>
           <button id="resniffBtn" style="padding: 2px 8px; font-size: 0.75rem; background: #334155; border: none; color: #fff; cursor: pointer;">Scan</button>
         </div>
         <div id="routeList" class="route-list">
@@ -312,10 +348,10 @@ function getWebUiHtml(): string {
             <option value="GET">GET</option>
             <option value="POST">POST</option>
             <option value="PUT">PUT</option>
-            <option value="DELETE">DELETE</option>
             <option value="PATCH">PATCH</option>
+            <option value="DELETE">DELETE</option>
           </select>
-          <input type="text" id="urlInput" value="http://localhost:3000/auth/login" placeholder="Enter request URL..." />
+          <input type="text" id="urlInput" value="http://localhost:3000/health" placeholder="Enter request URL..." />
           <button class="send-btn" id="sendBtn">1-Click Test ⚡</button>
         </div>
 
@@ -336,7 +372,7 @@ function getWebUiHtml(): string {
           <span>Response View</span>
           <span id="metricsBadge" class="status-tag" style="display:none;"></span>
         </div>
-        <pre id="responseOutput">// Click any route or past execution log to inspect results!</pre>
+        <pre id="responseOutput">// Click any discovered route in the left panel to test it instantly!</pre>
       </div>
     </main>
 
@@ -347,13 +383,14 @@ function getWebUiHtml(): string {
         <button id="clearLogsBtn" style="padding: 2px 8px; font-size: 0.75rem; background: #ef4444; border: none; color: #fff; cursor: pointer; border-radius: 4px;">Clear Logs</button>
       </div>
       <div id="logList" class="log-list" style="flex-direction: row; flex-wrap: nowrap; overflow-x: auto;">
-        <div style="padding: 16px; color: var(--muted); font-size: 0.85rem;">No execution logs recorded yet. Run any request to record telemetry.</div>
+        <div style="padding: 16px; color: var(--muted); font-size: 0.85rem;">No execution logs recorded yet.</div>
       </div>
     </div>
   </div>
 
   <script>
     const routeList = document.getElementById('routeList');
+    const routeCount = document.getElementById('routeCount');
     const resniffBtn = document.getElementById('resniffBtn');
     const sendBtn = document.getElementById('sendBtn');
     const methodSelect = document.getElementById('methodSelect');
@@ -364,8 +401,25 @@ function getWebUiHtml(): string {
     const metricsBadge = document.getElementById('metricsBadge');
     const logList = document.getElementById('logList');
     const clearLogsBtn = document.getElementById('clearLogsBtn');
+    const baseHostInput = document.getElementById('baseHostInput');
+    const activePortsNotice = document.getElementById('activePortsNotice');
 
     let allLogs = [];
+
+    async function probeActivePorts() {
+      try {
+        const res = await fetch('/api/probe-ports');
+        const data = await res.json();
+        if (data.activePorts && data.activePorts.length > 0) {
+          activePortsNotice.textContent = '🟢 Detected running backend port(s): ' + data.activePorts.join(', ');
+          if (!data.activePorts.includes(3000)) {
+            baseHostInput.value = 'http://localhost:' + data.activePorts[0];
+          }
+        } else {
+          activePortsNotice.textContent = '⚠️ No local backend detected running yet on ports 3000/5000/8080';
+        }
+      } catch (e) {}
+    }
 
     async function loadDiscoveredRoutes() {
       try {
@@ -387,6 +441,7 @@ function getWebUiHtml(): string {
     }
 
     function renderRoutes(routes) {
+      routeCount.textContent = routes.length;
       if (routes.length === 0) {
         routeList.innerHTML = '<div style="padding:16px; color:var(--muted); font-size:0.85rem;">No routes auto-detected in this directory. Add Express/FastAPI/Next.js/NestJS code to test!</div>';
         return;
@@ -406,7 +461,8 @@ function getWebUiHtml(): string {
         \`;
         item.addEventListener('click', () => {
           methodSelect.value = r.method;
-          urlInput.value = r.path.startsWith('http') ? r.path : 'http://localhost:3000' + (r.path.startsWith('/') ? r.path : '/' + r.path);
+          const baseHost = baseHostInput.value.trim().replace(/\\/$/, '');
+          urlInput.value = r.path.startsWith('http') ? r.path : baseHost + (r.path.startsWith('/') ? r.path : '/' + r.path);
           if (r.suggestedBody && Object.keys(r.suggestedBody).length > 0) {
             bodyInput.value = JSON.stringify(r.suggestedBody, null, 2);
           } else {
@@ -531,6 +587,7 @@ function getWebUiHtml(): string {
       }
     });
 
+    probeActivePorts();
     loadDiscoveredRoutes();
     loadExecutionLogs();
   </script>
