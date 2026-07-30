@@ -14,6 +14,7 @@ export interface DiscoveredRoute {
   description: string;
   suggestedHeaders?: Record<string, string>;
   suggestedBody?: Record<string, any>;
+  queryParams?: string[];
 }
 
 export function sniffProjectRoutes(targetDir: string = process.cwd()): DiscoveredRoute[] {
@@ -45,12 +46,10 @@ export function sniffProjectRoutes(targetDir: string = process.cwd()): Discovere
 
   collectFiles(targetDir);
 
-  // Helper to categorize module tag & execution order
   function categorizeRoute(routePath: string, filename: string): { tag: string; executionOrder: number; requiresAuth: boolean; description: string } {
     const lowerPath = routePath.toLowerCase();
     const lowerFile = filename.toLowerCase();
 
-    // 1. Auth & Onboarding (Order 1)
     if (lowerPath.includes("auth") || lowerPath.includes("login") || lowerPath.includes("register") || lowerPath.includes("sync") || lowerFile.includes("auth")) {
       const isPublic = lowerPath.includes("login") || lowerPath.includes("register");
       return {
@@ -61,7 +60,6 @@ export function sniffProjectRoutes(targetDir: string = process.cwd()): Discovere
       };
     }
 
-    // 2. User Profile & Account (Order 2)
     if (lowerPath.includes("me") || lowerPath.includes("profile") || lowerPath.includes("user/address")) {
       return {
         tag: "User Profile & Account",
@@ -71,7 +69,6 @@ export function sniffProjectRoutes(targetDir: string = process.cwd()): Discovere
       };
     }
 
-    // 3. Admin & System Management (Order 4)
     if (lowerPath.includes("admin") || lowerPath.includes("dashboard") || lowerPath.includes("analytics") || lowerFile.includes("admin")) {
       return {
         tag: "Administrative Operations",
@@ -81,7 +78,6 @@ export function sniffProjectRoutes(targetDir: string = process.cwd()): Discovere
       };
     }
 
-    // 4. Products & Catalog (Order 3)
     if (lowerPath.includes("product") || lowerPath.includes("categories") || lowerFile.includes("product")) {
       const isRead = !lowerPath.includes("post") && !lowerPath.includes("delete");
       return {
@@ -92,7 +88,6 @@ export function sniffProjectRoutes(targetDir: string = process.cwd()): Discovere
       };
     }
 
-    // 5. Orders & Transactions (Order 3)
     if (lowerPath.includes("order") || lowerPath.includes("proposal") || lowerFile.includes("order")) {
       return {
         tag: "Orders & Workflows",
@@ -102,7 +97,6 @@ export function sniffProjectRoutes(targetDir: string = process.cwd()): Discovere
       };
     }
 
-    // 6. Wallet & Payments (Order 3)
     if (lowerPath.includes("wallet") || lowerPath.includes("recharge") || lowerFile.includes("wallet")) {
       return {
         tag: "Wallet & Financials",
@@ -112,7 +106,6 @@ export function sniffProjectRoutes(targetDir: string = process.cwd()): Discovere
       };
     }
 
-    // Default Fallback
     const tagName = baseModuleName(filename) || "General Operations";
     return {
       tag: tagName.charAt(0).toUpperCase() + tagName.slice(1),
@@ -126,6 +119,21 @@ export function sniffProjectRoutes(targetDir: string = process.cwd()): Discovere
     return path.basename(filename, path.extname(filename)).replace(/\.(routes|route|controller)$/, "");
   }
 
+  // Scan file for req.body properties
+  function extractBodyProperties(content: string): Record<string, any> {
+    const props: Record<string, any> = {};
+    const matches = content.matchAll(/req\.body\.([a-zA-Z0-9_]+)/g);
+    for (const match of matches) {
+      const propName = match[1];
+      if (propName === "email") props[propName] = "user@example.com";
+      else if (propName === "password") props[propName] = "secretpassword";
+      else if (propName.includes("id") || propName.includes("Id")) props[propName] = 1;
+      else if (propName.includes("price") || propName.includes("amount")) props[propName] = 99.99;
+      else props[propName] = "sample_value";
+    }
+    return props;
+  }
+
   let idCounter = 1;
 
   for (const file of filesToScan) {
@@ -133,8 +141,10 @@ export function sniffProjectRoutes(targetDir: string = process.cwd()): Discovere
       const content = fs.readFileSync(file, "utf-8");
       const lines = content.split("\n");
       const relPath = path.relative(targetDir, file);
-      const baseFilename = path.basename(file, path.extname(file)).replace(/\.(routes|route|controller)$/, "");
+      const baseFilename = baseModuleName(file);
       const routeModuleName = baseFilename !== "index" && baseFilename !== "app" && baseFilename !== "server" ? baseFilename : "";
+
+      const extractedBodyProps = extractBodyProperties(content);
 
       lines.forEach((lineText, index) => {
         const lineNum = index + 1;
@@ -164,7 +174,7 @@ export function sniffProjectRoutes(targetDir: string = process.cwd()): Discovere
               requiresAuth: meta.requiresAuth,
               description: meta.description,
               suggestedHeaders: meta.requiresAuth ? { Authorization: "Bearer <token>" } : undefined,
-              suggestedBody: ["POST", "PUT", "PATCH"].includes(method) ? { sample_field: "test_value" } : undefined
+              suggestedBody: ["POST", "PUT", "PATCH"].includes(method) ? (Object.keys(extractedBodyProps).length > 0 ? extractedBodyProps : { sample_field: "test_value" }) : undefined
             });
           }
 
@@ -182,7 +192,7 @@ export function sniffProjectRoutes(targetDir: string = process.cwd()): Discovere
             requiresAuth: metaDirect.requiresAuth,
             description: metaDirect.description,
             suggestedHeaders: metaDirect.requiresAuth ? { Authorization: "Bearer <token>" } : undefined,
-            suggestedBody: ["POST", "PUT", "PATCH"].includes(method) ? { sample_field: "test_value" } : undefined
+            suggestedBody: ["POST", "PUT", "PATCH"].includes(method) ? (Object.keys(extractedBodyProps).length > 0 ? extractedBodyProps : { sample_field: "test_value" }) : undefined
           });
           return;
         }
@@ -208,7 +218,7 @@ export function sniffProjectRoutes(targetDir: string = process.cwd()): Discovere
               requiresAuth: meta.requiresAuth,
               description: meta.description,
               suggestedHeaders: meta.requiresAuth ? { Authorization: "Bearer <token>" } : undefined,
-              suggestedBody: ["POST", "PUT", "PATCH"].includes(method) ? { sample_field: "value" } : undefined
+              suggestedBody: ["POST", "PUT", "PATCH"].includes(method) ? (Object.keys(extractedBodyProps).length > 0 ? extractedBodyProps : { sample_field: "value" }) : undefined
             });
             return;
           }
@@ -219,6 +229,6 @@ export function sniffProjectRoutes(targetDir: string = process.cwd()): Discovere
     }
   }
 
-  // Sort routes by execution order priority (1: Auth -> 2: User -> 3: Resources -> 4: Admin)
+  // Sort routes by execution order priority
   return routes.sort((a, b) => a.executionOrder - b.executionOrder || a.path.localeCompare(b.path));
 }

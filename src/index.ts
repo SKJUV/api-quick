@@ -7,6 +7,10 @@ import { transpileToCode } from "./core/transpiler.js";
 import { launchTuiMode } from "./cli/tui.js";
 import { createWebServer } from "./server/app.js";
 import { serve } from "@hono/node-server";
+import { sniffProjectRoutes } from "./core/ast-sniffer.js";
+import { createMockServer } from "./core/mock.js";
+import { compareJsonStructures } from "./core/diff.js";
+import { BenchmarkEngine } from "./core/benchmark.js";
 
 async function findAvailablePort(startPort: number): Promise<number> {
   return new Promise((resolve) => {
@@ -35,10 +39,10 @@ async function main() {
 \x1b[1mCOMMANDS:\x1b[0m
   \x1b[33mtui\x1b[0m                     Launch full interactive Terminal UI workbench
   \x1b[33mweb\x1b[0m [--port 4000]       Launch React Web UI with CORS bypass proxy
-  \x1b[33mmock\x1b[0m --file <spec>      Launch zero-latency local mock API server
+  \x1b[33mmock\x1b[0m [--port 8080]      Launch zero-latency local AST mock API server
   \x1b[33mdiff\x1b[0m <url1> <url2>      Visual structural JSON diffing engine
   \x1b[33msniff\x1b[0m [dir]             Scan local source code AST for API routes
-  \x1b[33mbench\x1b[0m <url> -n 1000     Run high-throughput HTTP load benchmark
+  \x1b[33mbench\x1b[0m <url> -n 100 -c 10  Run high-throughput HTTP load benchmark
 
 \x1b[1mOPTIONS:\x1b[0m
   \x1b[32m-X, --method <METHOD>\x1b[0m   Specify HTTP method explicitly (GET, POST, PUT, DELETE, etc.)
@@ -100,23 +104,111 @@ async function main() {
   }
 
   if (firstCommand === "mock") {
-    console.log(`\x1b[1m\x1b[33m⚡ Launching api-quick Mock Server on http://localhost:8080...\x1b[0m`);
-    process.exit(0);
-  }
+    let mockPort = 8080;
+    const portIdx = rawArgs.indexOf("--port");
+    if (portIdx !== -1 && rawArgs[portIdx + 1]) {
+      mockPort = parseInt(rawArgs[portIdx + 1], 10);
+    }
 
-  if (firstCommand === "diff") {
-    console.log(`\x1b[1m\x1b[35m⚡ Structural JSON Diff Engine...\x1b[0m`);
-    process.exit(0);
+    console.log(`\n\x1b[1m\x1b[33m⚡ Launching api-quick Zero-Latency AST Mock Server on http://localhost:${mockPort}...\x1b[0m`);
+    createMockServer(mockPort);
+    return;
   }
 
   if (firstCommand === "sniff") {
-    console.log(`\x1b[1m\x1b[32m⚡ Scanning local source code AST for routes...\x1b[0m`);
-    process.exit(0);
+    const targetDir = rawArgs[1] || process.cwd();
+    console.log(`\n\x1b[1m\x1b[32m⚡ Scanning AST Routes in ${targetDir}...\x1b[0m\n`);
+    const routes = sniffProjectRoutes(targetDir);
+
+    if (routes.length === 0) {
+      console.log(`\x1b[33mNo routes detected in this directory.\x1b[0m`);
+      return;
+    }
+
+    console.log(`\x1b[1mDiscovered ${routes.length} AST Routes:\x1b[0m\n`);
+    routes.forEach((r) => {
+      const secTag = r.requiresAuth ? `\x1b[31m[Auth]\x1b[0m` : `\x1b[32m[Public]\x1b[0m`;
+      console.log(`\x1b[36m${r.method.padEnd(6)}\x1b[0m \x1b[1m${r.path.padEnd(40)}\x1b[0m ${secTag} \x1b[90m(${r.framework} - ${r.file}:${r.line})\x1b[0m`);
+    });
+    console.log("");
+    return;
   }
 
   if (firstCommand === "bench") {
-    console.log(`\x1b[1m\x1b[31m⚡ Running high-throughput load benchmark...\x1b[0m`);
-    process.exit(0);
+    const url = rawArgs[1];
+    if (!url) {
+      console.error(`\x1b[31mError: Please specify target URL for benchmark. Usage: api-quick bench <url> -n 100 -c 10\x1b[0m`);
+      process.exit(1);
+    }
+
+    let totalRequests = 100;
+    let concurrency = 10;
+
+    const nIdx = rawArgs.indexOf("-n");
+    if (nIdx !== -1 && rawArgs[nIdx + 1]) totalRequests = parseInt(rawArgs[nIdx + 1], 10);
+
+    const cIdx = rawArgs.indexOf("-c");
+    if (cIdx !== -1 && rawArgs[cIdx + 1]) concurrency = parseInt(rawArgs[cIdx + 1], 10);
+
+    console.log(`\n\x1b[1m\x1b[31m⚡ Running High-Throughput Load Benchmark on ${url} (${totalRequests} requests, ${concurrency} workers)...\x1b[0m\n`);
+    
+    const benchEngine = new BenchmarkEngine();
+    const result = await benchEngine.runBenchmark({
+      url,
+      totalRequests,
+      concurrency
+    });
+
+    console.log(`\x1b[1m\x1b[32m✔ BENCHMARK COMPLETE:\x1b[0m`);
+    console.log(`  Requests Per Second : \x1b[1m\x1b[33m${result.requestsPerSecond} req/s\x1b[0m`);
+    console.log(`  Total Duration      : ${result.totalDurationMs} ms`);
+    console.log(`  Successful / Failed : \x1b[32m${result.successCount}\x1b[0m / \x1b[31m${result.failureCount}\x1b[0m`);
+    console.log(`  Latency Percentiles : p50: ${result.p50Ms}ms | p95: ${result.p95Ms}ms | p99: ${result.p99Ms}ms`);
+    console.log(`  Min / Avg / Max     : ${result.minMs}ms / ${result.avgMs}ms / ${result.maxMs}ms\n`);
+    return;
+  }
+
+  if (firstCommand === "diff") {
+    const url1 = rawArgs[1];
+    const url2 = rawArgs[2];
+
+    if (!url1 || !url2) {
+      console.error(`\x1b[31mError: Usage: api-quick diff <url1> <url2>\x1b[0m`);
+      process.exit(1);
+    }
+
+    console.log(`\n\x1b[1m\x1b[35m⚡ Structural JSON Diffing Engine: Comparing ${url1} vs ${url2}...\x1b[0m\n`);
+    
+    const httpEngine = new CoreHttpEngine();
+    try {
+      const [res1, res2] = await Promise.all([
+        httpEngine.execute({ url: url1, method: "GET", headers: {}, timeoutMs: 10000, followRedirects: true, tlsVerify: true }),
+        httpEngine.execute({ url: url2, method: "GET", headers: {}, timeoutMs: 10000, followRedirects: true, tlsVerify: true })
+      ]);
+
+      const json1 = JSON.parse(res1.body);
+      const json2 = JSON.parse(res2.body);
+
+      const diff = compareJsonStructures(json1, json2);
+
+      if (diff.isIdentical) {
+        console.log(`\x1b[32m✔ Structures are 100% identical!\x1b[0m\n`);
+      } else {
+        if (diff.addedKeys.length > 0) {
+          console.log(`\x1b[32m+ Added Keys in URL 2:\x1b[0m`, diff.addedKeys);
+        }
+        if (diff.removedKeys.length > 0) {
+          console.log(`\x1b[31m- Missing Keys in URL 2:\x1b[0m`, diff.removedKeys);
+        }
+        if (diff.modifiedKeys.length > 0) {
+          console.log(`\x1b[33m~ Modified Value Types:\x1b[0m`, diff.modifiedKeys);
+        }
+        console.log("");
+      }
+    } catch (err: any) {
+      console.error(formatError(err.message));
+    }
+    return;
   }
 
   // Direct HTTP Request Execution
