@@ -2,6 +2,22 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { sniffProjectRoutes } from "../core/ast-sniffer.js";
 
+export interface ExecutionLog {
+  id: string;
+  timestamp: string;
+  method: string;
+  url: string;
+  status: number;
+  statusText: string;
+  durationMs: number;
+  responseSize: number;
+  requestHeaders?: Record<string, string>;
+  requestBody?: string;
+  responseBody?: string;
+}
+
+const executionLogs: ExecutionLog[] = [];
+
 export function createWebServer() {
   const app = new Hono();
 
@@ -17,7 +33,18 @@ export function createWebServer() {
     return c.json({ routes, count: routes.length });
   });
 
-  // CORS Bypass Proxy endpoint
+  // Action execution logs history endpoint
+  app.get("/api/logs", (c) => {
+    return c.json({ logs: executionLogs, count: executionLogs.length });
+  });
+
+  // Clear execution logs
+  app.delete("/api/logs", (c) => {
+    executionLogs.length = 0;
+    return c.json({ status: "cleared" });
+  });
+
+  // CORS Bypass Proxy endpoint with automatic Telemetry Logging
   app.all("/proxy/*", async (c) => {
     const targetUrl = c.req.header("X-Api-Quick-Target-Url");
     if (!targetUrl) {
@@ -31,27 +58,68 @@ export function createWebServer() {
     incomingHeaders.delete("referer");
 
     const method = c.req.method;
-    const body = ["GET", "HEAD"].includes(method) ? undefined : await c.req.raw.arrayBuffer();
+    const requestBodyText = ["GET", "HEAD"].includes(method) ? undefined : await c.req.text();
+    const body = requestBodyText ? new TextEncoder().encode(requestBodyText) : undefined;
+
+    const startTime = performance.now();
+    let status = 500;
+    let statusText = "Internal Server Error";
+    let responseText = "";
+    let totalTime = 0;
 
     try {
-      const startTime = performance.now();
       const proxyResponse = await fetch(targetUrl, {
         method,
         headers: incomingHeaders,
         body
       });
-      const totalTime = Math.round((performance.now() - startTime) * 100) / 100;
+
+      totalTime = Math.round((performance.now() - startTime) * 100) / 100;
+      status = proxyResponse.status;
+      statusText = proxyResponse.statusText;
+
+      responseText = await proxyResponse.text();
+
+      // Log execution telemetry
+      executionLogs.unshift({
+        id: `log-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+        timestamp: new Date().toLocaleTimeString(),
+        method,
+        url: targetUrl,
+        status,
+        statusText,
+        durationMs: totalTime,
+        responseSize: Buffer.byteLength(responseText, "utf-8"),
+        requestBody: requestBodyText,
+        responseBody: responseText
+      });
+
+      // Keep last 100 logs in memory
+      if (executionLogs.length > 100) executionLogs.pop();
 
       const responseHeaders = new Headers(proxyResponse.headers);
       responseHeaders.set("Access-Control-Allow-Origin", "*");
       responseHeaders.set("Access-Control-Allow-Expose-Headers", "*");
       responseHeaders.set("X-Api-Quick-Time-Ms", String(totalTime));
 
-      return new Response(proxyResponse.body, {
+      return new Response(responseText, {
         status: proxyResponse.status,
         headers: responseHeaders
       });
     } catch (err: any) {
+      totalTime = Math.round((performance.now() - startTime) * 100) / 100;
+      executionLogs.unshift({
+        id: `log-${Date.now()}`,
+        timestamp: new Date().toLocaleTimeString(),
+        method,
+        url: targetUrl,
+        status: 502,
+        statusText: "Bad Gateway / Connection Refused",
+        durationMs: totalTime,
+        responseSize: 0,
+        responseBody: err.message
+      });
+
       return c.json({ error: `Proxy Request Failed: ${err.message}` }, 502);
     }
   });
@@ -70,7 +138,7 @@ function getWebUiHtml(): string {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>⚡ api-quick - Vibe Coder Web Workbench</title>
+  <title>⚡ api-quick - Vibe Coder Web Workbench & Activity Logs</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -107,12 +175,20 @@ function getWebUiHtml(): string {
     .logo { font-size: 1.2rem; font-weight: 700; color: var(--primary); display: flex; align-items: center; gap: 8px; }
     .badge { background: #0284c7; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; }
     .vibe-tag { background: rgba(168, 85, 247, 0.2); color: var(--purple); padding: 4px 10px; border-radius: 16px; font-size: 0.8rem; font-weight: 600; }
-    main {
+    
+    .layout-container {
       flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 16px;
+      gap: 16px;
+      overflow: hidden;
+    }
+    main {
+      flex: 2;
       display: grid;
       grid-template-columns: 320px 1fr 1fr;
       gap: 16px;
-      padding: 16px;
       overflow: hidden;
     }
     .card {
@@ -132,7 +208,7 @@ function getWebUiHtml(): string {
       justify-content: space-between;
       align-items: center;
     }
-    .route-list {
+    .route-list, .log-list {
       flex: 1;
       overflow-y: auto;
       padding: 8px;
@@ -140,7 +216,7 @@ function getWebUiHtml(): string {
       flex-direction: column;
       gap: 8px;
     }
-    .route-item {
+    .route-item, .log-item {
       background: #090d16;
       border: 1px solid var(--border);
       border-radius: 6px;
@@ -148,15 +224,15 @@ function getWebUiHtml(): string {
       cursor: pointer;
       transition: all 0.15s;
     }
-    .route-item:hover { border-color: var(--primary); transform: translateY(-1px); }
-    .route-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+    .route-item:hover, .log-item:hover { border-color: var(--primary); transform: translateY(-1px); }
+    .route-top, .log-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
     .method-badge { font-weight: 700; font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; }
     .method-GET { background: rgba(56, 189, 248, 0.2); color: var(--primary); }
     .method-POST { background: rgba(34, 197, 94, 0.2); color: var(--green); }
     .method-PUT { background: rgba(234, 179, 8, 0.2); color: var(--yellow); }
     .method-DELETE { background: rgba(239, 68, 68, 0.2); color: var(--red); }
-    .route-path { font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; font-weight: 600; color: #fff; word-break: break-all; }
-    .route-meta { font-size: 0.75rem; color: var(--muted); margin-top: 4px; }
+    .route-path, .log-url { font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; font-weight: 600; color: #fff; word-break: break-all; }
+    .route-meta, .log-meta { font-size: 0.75rem; color: var(--muted); margin-top: 4px; display: flex; justify-content: space-between; }
     
     .request-bar { display: flex; gap: 8px; padding: 16px; }
     select, input, button, textarea {
@@ -182,7 +258,7 @@ function getWebUiHtml(): string {
     button.send-btn:hover { background: #0369a1; }
     .form-group { padding: 12px 16px; display: flex; flex-direction: column; gap: 8px; }
     label { font-size: 0.8rem; color: var(--muted); text-transform: uppercase; font-weight: 600; }
-    textarea { height: 160px; font-family: 'JetBrains Mono', monospace; resize: vertical; }
+    textarea { height: 140px; font-family: 'JetBrains Mono', monospace; resize: vertical; }
     pre {
       font-family: 'JetBrains Mono', monospace;
       padding: 16px;
@@ -195,62 +271,86 @@ function getWebUiHtml(): string {
     .status-tag { font-weight: 700; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; }
     .status-2xx { background: rgba(34, 197, 94, 0.2); color: var(--green); }
     .status-4xx, .status-5xx { background: rgba(239, 68, 68, 0.2); color: var(--red); }
+
+    /* Bottom Activity Drawer */
+    .activity-drawer {
+      height: 220px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
   </style>
 </head>
 <body>
   <header>
     <div class="logo">⚡ api-quick <span class="badge">v0.1.0</span></div>
-    <div class="vibe-tag">✨ Vibe Coder Auto-Sniffing Mode Active</div>
+    <div class="vibe-tag">✨ Vibe Coder Auto-Sniffing & Telemetry Logging Active</div>
     <div style="font-size: 0.85rem; color: var(--muted);">CORS Proxy: Active</div>
   </header>
 
-  <main>
-    <!-- Left Sidebar: Discovered Routes Catalog -->
-    <div class="card">
+  <div class="layout-container">
+    <main>
+      <!-- Left Sidebar: Discovered Routes Catalog -->
+      <div class="card">
+        <div class="card-header">
+          <span>Project AST Routes</span>
+          <button id="resniffBtn" style="padding: 2px 8px; font-size: 0.75rem; background: #334155; border: none; color: #fff; cursor: pointer;">Scan</button>
+        </div>
+        <div id="routeList" class="route-list">
+          <div style="padding: 16px; color: var(--muted); font-size: 0.85rem;">Scanning workspace for API routes...</div>
+        </div>
+      </div>
+
+      <!-- Request Panel -->
+      <div class="card">
+        <div class="card-header">HTTP Request Builder</div>
+        <div class="request-bar">
+          <select id="methodSelect">
+            <option value="GET">GET</option>
+            <option value="POST">POST</option>
+            <option value="PUT">PUT</option>
+            <option value="DELETE">DELETE</option>
+            <option value="PATCH">PATCH</option>
+          </select>
+          <input type="text" id="urlInput" value="http://localhost:3000/auth/login" placeholder="Enter request URL..." />
+          <button class="send-btn" id="sendBtn">1-Click Test ⚡</button>
+        </div>
+
+        <div class="form-group">
+          <label>Headers (JSON Format)</label>
+          <textarea id="headersInput">{\n  "Accept": "application/json"\n}</textarea>
+        </div>
+
+        <div class="form-group">
+          <label>JSON Body Payload</label>
+          <textarea id="bodyInput" placeholder='{\n  "email": "user@example.com"\n}'></textarea>
+        </div>
+      </div>
+
+      <!-- Response Panel -->
+      <div class="card">
+        <div class="card-header">
+          <span>Response View</span>
+          <span id="metricsBadge" class="status-tag" style="display:none;"></span>
+        </div>
+        <pre id="responseOutput">// Click any route or past execution log to inspect results!</pre>
+      </div>
+    </main>
+
+    <!-- Bottom Activity Drawer: Action Execution Telemetry Logs -->
+    <div class="activity-drawer">
       <div class="card-header">
-        <span>Project AST Routes</span>
-        <button id="resniffBtn" style="padding: 2px 8px; font-size: 0.75rem; background: #334155; border: none; color: #fff; cursor: pointer;">Scan</button>
+        <span>📋 Executed Action Telemetry Logs</span>
+        <button id="clearLogsBtn" style="padding: 2px 8px; font-size: 0.75rem; background: #ef4444; border: none; color: #fff; cursor: pointer; border-radius: 4px;">Clear Logs</button>
       </div>
-      <div id="routeList" class="route-list">
-        <div style="padding: 16px; color: var(--muted); font-size: 0.85rem;">Scanning workspace for API routes...</div>
-      </div>
-    </div>
-
-    <!-- Request Panel -->
-    <div class="card">
-      <div class="card-header">HTTP Request Builder</div>
-      <div class="request-bar">
-        <select id="methodSelect">
-          <option value="GET">GET</option>
-          <option value="POST">POST</option>
-          <option value="PUT">PUT</option>
-          <option value="DELETE">DELETE</option>
-          <option value="PATCH">PATCH</option>
-        </select>
-        <input type="text" id="urlInput" value="http://localhost:3000/api/users" placeholder="Enter request URL..." />
-        <button class="send-btn" id="sendBtn">1-Click Test ⚡</button>
-      </div>
-
-      <div class="form-group">
-        <label>Headers (JSON Format)</label>
-        <textarea id="headersInput">{\n  "Accept": "application/json"\n}</textarea>
-      </div>
-
-      <div class="form-group">
-        <label>JSON Body Payload</label>
-        <textarea id="bodyInput" placeholder='{\n  "key": "value"\n}'></textarea>
+      <div id="logList" class="log-list" style="flex-direction: row; flex-wrap: nowrap; overflow-x: auto;">
+        <div style="padding: 16px; color: var(--muted); font-size: 0.85rem;">No execution logs recorded yet. Run any request to record telemetry.</div>
       </div>
     </div>
-
-    <!-- Response Panel -->
-    <div class="card">
-      <div class="card-header">
-        <span>Response View</span>
-        <span id="metricsBadge" class="status-tag" style="display:none;"></span>
-      </div>
-      <pre id="responseOutput">// Click any discovered route on the left panel to test it instantly!</pre>
-    </div>
-  </main>
+  </div>
 
   <script>
     const routeList = document.getElementById('routeList');
@@ -262,28 +362,38 @@ function getWebUiHtml(): string {
     const bodyInput = document.getElementById('bodyInput');
     const responseOutput = document.getElementById('responseOutput');
     const metricsBadge = document.getElementById('metricsBadge');
+    const logList = document.getElementById('logList');
+    const clearLogsBtn = document.getElementById('clearLogsBtn');
 
-    let allRoutes = [];
+    let allLogs = [];
 
     async function loadDiscoveredRoutes() {
       try {
         const res = await fetch('/api/routes');
         const data = await res.json();
-        allRoutes = data.routes || [];
-        renderRoutes(allRoutes);
+        renderRoutes(data.routes || []);
       } catch (e) {
         routeList.innerHTML = '<div style="padding:16px; color:var(--red);">Failed to scan routes</div>';
       }
     }
 
+    async function loadExecutionLogs() {
+      try {
+        const res = await fetch('/api/logs');
+        const data = await res.json();
+        allLogs = data.logs || [];
+        renderLogs(allLogs);
+      } catch (e) {}
+    }
+
     function renderRoutes(routes) {
       if (routes.length === 0) {
-        routeList.innerHTML = '<div style="padding:16px; color:var(--muted); font-size:0.85rem;">No routes auto-detected in this directory. Add Express/FastAPI/Next.js code to test!</div>';
+        routeList.innerHTML = '<div style="padding:16px; color:var(--muted); font-size:0.85rem;">No routes auto-detected in this directory. Add Express/FastAPI/Next.js/NestJS code to test!</div>';
         return;
       }
 
       routeList.innerHTML = '';
-      routes.forEach((r, idx) => {
+      routes.forEach((r) => {
         const item = document.createElement('div');
         item.className = 'route-item';
         item.innerHTML = \`
@@ -307,6 +417,57 @@ function getWebUiHtml(): string {
         routeList.appendChild(item);
       });
     }
+
+    function renderLogs(logs) {
+      if (logs.length === 0) {
+        logList.innerHTML = '<div style="padding:16px; color:var(--muted); font-size:0.85rem;">No execution logs recorded yet.</div>';
+        return;
+      }
+
+      logList.innerHTML = '';
+      logs.forEach((log) => {
+        const item = document.createElement('div');
+        item.className = 'log-item';
+        item.style.minWidth = '280px';
+        const statusColorClass = log.status < 300 ? 'status-2xx' : 'status-4xx';
+
+        item.innerHTML = \`
+          <div class="log-top">
+            <span class="method-badge method-\${log.method}">\${log.method}</span>
+            <span class="status-tag \${statusColorClass}">HTTP \${log.status}</span>
+          </div>
+          <div class="log-url">\${log.url}</div>
+          <div class="log-meta">
+            <span>⏱️ \${log.durationMs}ms</span>
+            <span>🕒 \${log.timestamp}</span>
+          </div>
+        \`;
+
+        item.addEventListener('click', () => {
+          methodSelect.value = log.method;
+          urlInput.value = log.url;
+          if (log.requestBody) bodyInput.value = log.requestBody;
+
+          metricsBadge.style.display = 'inline-block';
+          metricsBadge.className = 'status-tag ' + statusColorClass;
+          metricsBadge.textContent = \`HTTP \${log.status} \${log.statusText} (\${log.durationMs}ms)\`;
+
+          try {
+            const parsed = JSON.parse(log.responseBody || '');
+            responseOutput.textContent = JSON.stringify(parsed, null, 2);
+          } catch {
+            responseOutput.textContent = log.responseBody || '// Empty response';
+          }
+        });
+
+        logList.appendChild(item);
+      });
+    }
+
+    clearLogsBtn.addEventListener('click', async () => {
+      await fetch('/api/logs', { method: 'DELETE' });
+      loadExecutionLogs();
+    });
 
     resniffBtn.addEventListener('click', loadDiscoveredRoutes);
 
@@ -359,15 +520,19 @@ function getWebUiHtml(): string {
           responseOutput.textContent = text;
         }
 
+        setTimeout(loadExecutionLogs, 100);
+
       } catch (err) {
         metricsBadge.style.display = 'inline-block';
         metricsBadge.className = 'status-tag status-5xx';
         metricsBadge.textContent = 'Network Error';
         responseOutput.textContent = 'Error: ' + err.message;
+        setTimeout(loadExecutionLogs, 100);
       }
     });
 
     loadDiscoveredRoutes();
+    loadExecutionLogs();
   </script>
 </body>
 </html>`;
