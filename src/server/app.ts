@@ -25,7 +25,7 @@ export function createWebServer(currentPort: number = 4000) {
 
   app.use("*", cors({ origin: "*", allowMethods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"] }));
 
-  app.get("/api/health", (c) => c.json({ status: "ok", engine: "api-quick", version: "0.1.0" }));
+  app.get("/api/health", (c) => c.json({ status: "ok", engine: "api-quick", version: "1.0.0" }));
 
   app.get("/api/routes", (c) => {
     const rawRoutes = sniffProjectRoutes();
@@ -240,34 +240,35 @@ function getWebUiHtml(): string {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>api-quick — API Workbench & Automation Engine</title>
+  <title>api-quick — Liquid Glass API Workbench</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
     :root[data-theme="dark"] {
-      --bg: #090d16;
-      --panel: #131b2e;
-      --card-bg: #182238;
-      --border: #23314d;
-      --border-hover: #33466d;
-      --text: #f1f5f9;
+      --bg-gradient: radial-gradient(circle at 50% 0%, #1e293b 0%, #0f172a 50%, #080c14 100%);
+      --glass-panel: rgba(15, 23, 42, 0.65);
+      --glass-card: rgba(30, 41, 59, 0.55);
+      --glass-border: rgba(255, 255, 255, 0.08);
+      --glass-border-hover: rgba(56, 189, 248, 0.35);
+      --text: #f8fafc;
       --text-muted: #94a3b8;
-      --primary: #0284c7;
-      --primary-hover: #0369a1;
+      --primary: #38bdf8;
+      --primary-hover: #0284c7;
       --accent: #38bdf8;
       --green: #10b981;
       --yellow: #f59e0b;
-      --red: #ef4444;
-      --purple: #8b5cf6;
-      --input-bg: #0c1220;
+      --red: #f43f5e;
+      --purple: #a855f7;
+      --input-bg: rgba(15, 23, 42, 0.8);
+      --shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.36);
     }
     :root[data-theme="light"] {
-      --bg: #f8fafc;
-      --panel: #ffffff;
-      --card-bg: #f1f5f9;
-      --border: #cbd5e1;
-      --border-hover: #94a3b8;
+      --bg-gradient: radial-gradient(circle at 50% 0%, #e2e8f0 0%, #f1f5f9 50%, #f8fafc 100%);
+      --glass-panel: rgba(255, 255, 255, 0.75);
+      --glass-card: rgba(241, 245, 249, 0.7);
+      --glass-border: rgba(0, 0, 0, 0.08);
+      --glass-border-hover: rgba(2, 132, 199, 0.35);
       --text: #0f172a;
       --text-muted: #64748b;
       --primary: #0284c7;
@@ -275,31 +276,15 @@ function getWebUiHtml(): string {
       --accent: #0284c7;
       --green: #059669;
       --yellow: #d97706;
-      --red: #dc2626;
+      --red: #e11d48;
       --purple: #7c3aed;
-      --input-bg: #ffffff;
+      --input-bg: rgba(255, 255, 255, 0.9);
+      --shadow: 0 8px 24px 0 rgba(0, 0, 0, 0.08);
     }
-    :root[data-theme="oled"] {
-      --bg: #000000;
-      --panel: #0a0a0a;
-      --card-bg: #121212;
-      --border: #262626;
-      --border-hover: #404040;
-      --text: #ffffff;
-      --text-muted: #a3a3a3;
-      --primary: #38bdf8;
-      --primary-hover: #0284c7;
-      --accent: #38bdf8;
-      --green: #22c55e;
-      --yellow: #eab308;
-      --red: #ef4444;
-      --purple: #a855f7;
-      --input-bg: #000000;
-    }
-    
-    * { box-sizing: border-box; margin: 0; padding: 0; transition: background-color 0.2s, border-color 0.2s; }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; transition: background 0.2s, border-color 0.2s, box-shadow 0.2s; }
     body {
-      background-color: var(--bg);
+      background: var(--bg-gradient);
       color: var(--text);
       font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
       height: 100vh;
@@ -307,13 +292,24 @@ function getWebUiHtml(): string {
       flex-direction: column;
       overflow: hidden;
     }
+
+    /* iOS Liquid Glass Card Base */
+    .glass {
+      background: var(--glass-panel);
+      backdrop-filter: blur(16px) saturate(180%);
+      -webkit-backdrop-filter: blur(16px) saturate(180%);
+      border: 1px solid var(--glass-border);
+      border-radius: 12px;
+      box-shadow: var(--shadow);
+    }
+    
     header {
-      background: var(--panel);
-      border-bottom: 1px solid var(--border);
+      margin: 12px 14px 0 14px;
       padding: 10px 20px;
       display: flex;
       align-items: center;
       justify-content: space-between;
+      border-radius: 12px;
     }
     .logo {
       font-size: 1.1rem;
@@ -325,12 +321,12 @@ function getWebUiHtml(): string {
       letter-spacing: -0.3px;
     }
     .badge {
-      background: rgba(56, 189, 248, 0.1);
+      background: rgba(56, 189, 248, 0.12);
       border: 1px solid rgba(56, 189, 248, 0.3);
       color: var(--accent);
-      padding: 2px 8px;
-      border-radius: 4px;
-      font-size: 0.75rem;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 0.72rem;
       font-weight: 600;
     }
     .header-right {
@@ -338,35 +334,18 @@ function getWebUiHtml(): string {
       align-items: center;
       gap: 10px;
     }
-    .status-indicator {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 0.8rem;
-      color: var(--text-muted);
-    }
-    .dot-active {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background-color: var(--green);
-      box-shadow: 0 0 8px var(--green);
-    }
     
     .layout-container {
       flex: 1;
       display: flex;
       flex-direction: column;
-      padding: 12px;
+      padding: 12px 14px;
       gap: 12px;
       overflow: hidden;
     }
 
     .base-url-bar {
-      background: var(--panel);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 8px 16px;
+      padding: 10px 18px;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -376,7 +355,7 @@ function getWebUiHtml(): string {
     .base-url-left {
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 12px;
       flex: 1;
     }
     
@@ -389,76 +368,73 @@ function getWebUiHtml(): string {
     }
 
     .card {
-      background: var(--panel);
-      border: 1px solid var(--border);
-      border-radius: 6px;
       display: flex;
       flex-direction: column;
       overflow: hidden;
     }
     .card-header {
-      background: rgba(0,0,0,0.15);
-      padding: 10px 14px;
-      border-bottom: 1px solid var(--border);
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--glass-border);
       font-size: 0.85rem;
       font-weight: 600;
       display: flex;
       justify-content: space-between;
       align-items: center;
+      background: rgba(0,0,0,0.12);
     }
     
     .search-input-box {
-      padding: 8px 12px;
-      border-bottom: 1px solid var(--border);
-      background: var(--card-bg);
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--glass-border);
       display: flex;
       gap: 8px;
     }
     .search-input-box input {
       flex: 1;
       background: var(--input-bg);
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      padding: 6px 10px;
+      border: 1px solid var(--glass-border);
+      border-radius: 8px;
+      padding: 7px 12px;
       color: var(--text);
       font-size: 0.8rem;
     }
     .search-input-box select {
-      padding: 4px 8px;
+      padding: 6px 10px;
       font-size: 0.78rem;
+      border-radius: 8px;
     }
 
     .group-header {
       background: rgba(56, 189, 248, 0.08);
       border-left: 3px solid var(--accent);
-      padding: 6px 10px;
-      font-size: 0.75rem;
+      padding: 6px 12px;
+      font-size: 0.72rem;
       font-weight: 700;
       color: var(--accent);
       text-transform: uppercase;
       letter-spacing: 0.5px;
       margin-top: 8px;
-      border-radius: 2px;
+      border-radius: 4px;
     }
 
     .route-list {
       flex: 1;
       overflow-y: auto;
-      padding: 8px;
+      padding: 10px;
       display: flex;
       flex-direction: column;
-      gap: 6px;
+      gap: 8px;
     }
     .route-item {
-      background: var(--card-bg);
-      border: 1px solid var(--border);
-      border-radius: 5px;
-      padding: 8px 10px;
+      background: var(--glass-card);
+      border: 1px solid var(--glass-border);
+      border-radius: 8px;
+      padding: 10px 12px;
       cursor: pointer;
-      transition: all 0.12s ease;
+      transition: all 0.15s ease;
     }
     .route-item:hover {
-      border-color: var(--accent);
+      border-color: var(--glass-border-hover);
       transform: translateY(-1px);
     }
     .route-top {
@@ -470,15 +446,15 @@ function getWebUiHtml(): string {
     .method-badge {
       font-weight: 700;
       font-size: 0.65rem;
-      padding: 2px 6px;
-      border-radius: 3px;
+      padding: 2px 8px;
+      border-radius: 20px;
       letter-spacing: 0.5px;
     }
     .method-GET { background: rgba(56, 189, 248, 0.15); color: var(--accent); border: 1px solid rgba(56, 189, 248, 0.3); }
     .method-POST { background: rgba(16, 185, 129, 0.15); color: var(--green); border: 1px solid rgba(16, 185, 129, 0.3); }
     .method-PUT { background: rgba(245, 158, 11, 0.15); color: var(--yellow); border: 1px solid rgba(245, 158, 11, 0.3); }
-    .method-PATCH { background: rgba(139, 92, 246, 0.15); color: var(--purple); border: 1px solid rgba(139, 92, 246, 0.3); }
-    .method-DELETE { background: rgba(239, 68, 68, 0.15); color: var(--red); border: 1px solid rgba(239, 68, 68, 0.3); }
+    .method-PATCH { background: rgba(168, 85, 247, 0.15); color: var(--purple); border: 1px solid rgba(168, 85, 247, 0.3); }
+    .method-DELETE { background: rgba(244, 63, 94, 0.15); color: var(--red); border: 1px solid rgba(244, 63, 94, 0.3); }
     
     .route-path {
       font-family: 'JetBrains Mono', monospace;
@@ -498,40 +474,37 @@ function getWebUiHtml(): string {
 
     .sec-badge {
       font-size: 0.65rem;
-      padding: 1px 5px;
-      border-radius: 3px;
+      padding: 2px 7px;
+      border-radius: 20px;
       font-weight: 600;
     }
-    .sec-auth { background: rgba(239, 68, 68, 0.1); color: var(--red); border: 1px solid rgba(239, 68, 68, 0.3); }
+    .sec-auth { background: rgba(244, 63, 94, 0.1); color: var(--red); border: 1px solid rgba(244, 63, 94, 0.3); }
     .sec-public { background: rgba(16, 185, 129, 0.1); color: var(--green); border: 1px solid rgba(16, 185, 129, 0.3); }
 
     .request-bar {
       display: flex;
       gap: 8px;
       padding: 12px;
-      background: var(--card-bg);
-      border-bottom: 1px solid var(--border);
+      border-bottom: 1px solid var(--glass-border);
     }
     select, input[type="text"], button, textarea {
       font-family: inherit;
       font-size: 0.85rem;
-      border-radius: 4px;
-      border: 1px solid var(--border);
+      border-radius: 8px;
+      border: 1px solid var(--glass-border);
       background: var(--input-bg);
       color: var(--text);
-      padding: 8px 10px;
+      padding: 8px 12px;
+      outline: none;
     }
     select {
-      background: var(--panel);
       color: var(--accent);
       font-weight: 600;
       cursor: pointer;
-      outline: none;
     }
     input[type="text"] {
       flex: 1;
       font-family: 'JetBrains Mono', monospace;
-      outline: none;
     }
     input[type="text"]:focus {
       border-color: var(--accent);
@@ -543,6 +516,7 @@ function getWebUiHtml(): string {
       padding: 8px 18px;
       cursor: pointer;
       border: none;
+      border-radius: 8px;
       display: flex;
       align-items: center;
       gap: 6px;
@@ -550,27 +524,28 @@ function getWebUiHtml(): string {
     }
     button.btn-primary:hover { background: var(--primary-hover); }
     button.btn-secondary {
-      background: var(--card-bg);
-      border: 1px solid var(--border);
+      background: var(--glass-card);
+      border: 1px solid var(--glass-border);
       color: var(--text);
       font-weight: 500;
       cursor: pointer;
       display: flex;
       align-items: center;
       gap: 6px;
-      padding: 4px 10px;
+      padding: 6px 12px;
+      border-radius: 8px;
       font-size: 0.78rem;
     }
-    button.btn-secondary:hover { border-color: var(--border-hover); }
+    button.btn-secondary:hover { border-color: var(--glass-border-hover); }
 
     .form-group {
-      padding: 10px 12px;
+      padding: 12px 14px;
       display: flex;
       flex-direction: column;
       gap: 6px;
     }
     label {
-      font-size: 0.75rem;
+      font-size: 0.72rem;
       color: var(--text-muted);
       text-transform: uppercase;
       font-weight: 600;
@@ -580,36 +555,32 @@ function getWebUiHtml(): string {
       height: 120px;
       font-family: 'JetBrains Mono', monospace;
       resize: vertical;
-      outline: none;
     }
     textarea:focus { border-color: var(--accent); }
 
     pre {
       font-family: 'JetBrains Mono', monospace;
-      padding: 14px;
+      padding: 16px;
       font-size: 0.82rem;
       overflow: auto;
       flex: 1;
       white-space: pre-wrap;
       background: var(--input-bg);
-      line-height: 1.45;
+      line-height: 1.5;
     }
     .status-tag {
       font-weight: 600;
-      padding: 3px 8px;
-      border-radius: 4px;
+      padding: 4px 10px;
+      border-radius: 20px;
       font-size: 0.78rem;
       font-family: 'JetBrains Mono', monospace;
     }
     .status-2xx { background: rgba(16, 185, 129, 0.15); color: var(--green); border: 1px solid rgba(16, 185, 129, 0.3); }
-    .status-4xx, .status-5xx { background: rgba(239, 68, 68, 0.15); color: var(--red); border: 1px solid rgba(239, 68, 68, 0.3); }
+    .status-4xx, .status-5xx { background: rgba(244, 63, 94, 0.15); color: var(--red); border: 1px solid rgba(244, 63, 94, 0.3); }
 
     /* Bottom Activity Drawer */
     .activity-drawer {
-      height: 190px;
-      background: var(--panel);
-      border: 1px solid var(--border);
-      border-radius: 6px;
+      height: 180px;
       display: flex;
       flex-direction: column;
       overflow: hidden;
@@ -617,19 +588,19 @@ function getWebUiHtml(): string {
     .log-list {
       flex: 1;
       overflow-x: auto;
-      padding: 8px;
+      padding: 10px;
       display: flex;
-      gap: 8px;
+      gap: 10px;
       align-items: center;
     }
     .log-item {
-      background: var(--card-bg);
-      border: 1px solid var(--border);
-      border-radius: 5px;
-      padding: 8px 10px;
-      min-width: 260px;
+      background: var(--glass-card);
+      border: 1px solid var(--glass-border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      min-width: 270px;
       cursor: pointer;
-      transition: all 0.12s;
+      transition: all 0.15s;
     }
     .log-item:hover { border-color: var(--accent); }
     .log-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
@@ -641,29 +612,25 @@ function getWebUiHtml(): string {
       display: none;
       position: fixed;
       top: 0; left: 0; width: 100vw; height: 100vh;
-      background: rgba(0,0,0,0.7);
-      backdrop-filter: blur(4px);
+      background: rgba(0, 0, 0, 0.65);
+      backdrop-filter: blur(12px);
       z-index: 999;
       align-items: center;
       justify-content: center;
     }
     .modal-box {
-      background: var(--panel);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      width: 600px;
+      width: 620px;
       max-width: 90vw;
       display: flex;
       flex-direction: column;
       overflow: hidden;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
     }
     .modal-body {
-      padding: 16px;
+      padding: 18px;
       font-size: 0.85rem;
       display: flex;
       flex-direction: column;
-      gap: 12px;
+      gap: 14px;
       max-height: 70vh;
       overflow-y: auto;
     }
@@ -674,25 +641,25 @@ function getWebUiHtml(): string {
       margin-top: 6px;
     }
     .guide-table th, .guide-table td {
-      border: 1px solid var(--border);
-      padding: 8px 10px;
+      border: 1px solid var(--glass-border);
+      padding: 10px 12px;
       text-align: left;
     }
     .guide-table th {
-      background: var(--card-bg);
+      background: rgba(0,0,0,0.15);
       color: var(--accent);
     }
     
-    svg.icon { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    svg.icon { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
   </style>
 </head>
 <body>
   <!-- Header -->
-  <header>
+  <header class="glass">
     <div class="logo">
-      <svg class="icon" style="width:18px; height:18px; stroke: var(--accent);" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+      <svg class="icon" style="width:20px; height:20px; stroke: var(--accent);" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
       api-quick
-      <span class="badge">v0.1.0 Engine</span>
+      <span class="badge">v1.0.0 Liquid Engine</span>
     </div>
     <div class="header-right">
       <button id="authGuideBtn" class="btn-secondary" style="color: var(--accent); border-color: rgba(56, 189, 248, 0.4);">
@@ -720,19 +687,19 @@ function getWebUiHtml(): string {
 
   <div class="layout-container">
     <!-- Config Bar for Backend Host, Port, and Authorization Token -->
-    <div class="base-url-bar">
+    <div class="base-url-bar glass">
       <div class="base-url-left">
         <span style="color: var(--text-muted); font-weight: 600;">Target Host:</span>
-        <input type="text" id="baseHostInput" value="http://localhost:4000" style="width: 200px; padding: 4px 8px; font-size: 0.82rem;" />
+        <input type="text" id="baseHostInput" value="http://localhost:4000" style="width: 200px; padding: 5px 10px; font-size: 0.82rem;" />
         <span style="color: var(--text-muted); font-weight: 600; margin-left: 10px;">Bearer Auth Token:</span>
-        <input type="text" id="authTokenInput" placeholder="Paste Bearer Token or run /sync to auto-capture..." style="flex: 1; padding: 4px 8px; font-size: 0.82rem; color: var(--accent);" />
+        <input type="text" id="authTokenInput" placeholder="Paste Bearer Token or run /sync to auto-capture..." style="flex: 1; padding: 5px 10px; font-size: 0.82rem; color: var(--accent);" />
       </div>
       <div id="activePortsNotice" style="color: var(--green); font-size: 0.8rem; font-weight: 500;"></div>
     </div>
 
     <main>
       <!-- Left Sidebar: Discovered Routes Catalog Grouped by OpenAPI Tag & Execution Flow -->
-      <div class="card">
+      <div class="card glass">
         <div class="card-header">
           <span>Swagger Grouped Routes (<span id="routeCount">0</span>)</span>
           <button id="resniffBtn" class="btn-secondary">
@@ -754,7 +721,7 @@ function getWebUiHtml(): string {
       </div>
 
       <!-- Request Panel -->
-      <div class="card">
+      <div class="card glass">
         <div class="card-header">
           <span>HTTP Request Builder</span>
         </div>
@@ -785,7 +752,7 @@ function getWebUiHtml(): string {
       </div>
 
       <!-- Response Panel -->
-      <div class="card">
+      <div class="card glass">
         <div class="card-header">
           <span>Response Inspector & Diagnostics</span>
           <span id="metricsBadge" class="status-tag" style="display:none;"></span>
@@ -795,10 +762,10 @@ function getWebUiHtml(): string {
     </main>
 
     <!-- Bottom Activity Drawer: Action Execution Telemetry Logs -->
-    <div class="activity-drawer">
+    <div class="activity-drawer glass">
       <div class="card-header">
         <span>Execution Telemetry Logs</span>
-        <button id="clearLogsBtn" class="btn-secondary" style="color: var(--red); border-color: rgba(239, 68, 68, 0.3);">
+        <button id="clearLogsBtn" class="btn-secondary" style="color: var(--red); border-color: rgba(244, 63, 94, 0.3);">
           <svg class="icon" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
           Clear Logs
         </button>
@@ -811,7 +778,7 @@ function getWebUiHtml(): string {
 
   <!-- Auth Guide Modal UI -->
   <div id="guideModalBackdrop" class="modal-backdrop">
-    <div class="modal-box">
+    <div class="modal-box glass">
       <div class="card-header">
         <span>Authentication & JWT Token Guide</span>
         <button id="closeGuideModalBtn" class="btn-secondary">X</button>
@@ -856,7 +823,7 @@ function getWebUiHtml(): string {
           </tbody>
         </table>
 
-        <div style="background: var(--card-bg); padding: 10px; border-radius: 4px; border: 1px solid var(--border); font-size: 0.78rem; margin-top: 6px;">
+        <div style="background: rgba(56, 189, 248, 0.08); padding: 12px; border-radius: 8px; border: 1px solid var(--glass-border); font-size: 0.78rem; margin-top: 6px;">
           <strong>Automatic Token Injection:</strong><br />
           When you execute any login endpoint that returns a token key, <code>api-quick</code> recursively extracts the token and populates the <code>Bearer Auth Token</code> header bar automatically!
         </div>
@@ -892,7 +859,7 @@ function getWebUiHtml(): string {
 
     let allRoutes = [];
     let allLogs = [];
-    const themes = ['dark', 'light', 'oled'];
+    const themes = ['dark', 'light'];
     let currentThemeIdx = 0;
 
     themeToggleBtn.addEventListener('click', () => {
