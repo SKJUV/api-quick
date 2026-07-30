@@ -1,0 +1,45 @@
+name: CI Pipeline & API Verification
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-test:
+    name: Build, Lint & Run API Quick Assertions
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js Runtime
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Verify TypeScript Compilation
+        run: npm run build
+
+      - name: Run Type Checks
+        run: npm run lint
+
+      - name: Install Package Globally for E2E Assertions Test
+        run: npm install -g .
+
+      - name: Test AST Route Sniffer
+        run: api-quick sniff
+
+      - name: Test Mock Server & CI Assertions
+        run: |
+          api-quick mock --port 8080 &
+          MOCK_PID=$!
+          sleep 2
+          api-quick GET http://localhost:8080/_mock/status --expect-status 200 --expect-max-time 300ms
+          kill $MOCK_PID
