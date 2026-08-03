@@ -29,15 +29,7 @@ export interface NetworkResponseSpec {
   metrics: NetworkResponseMetrics;
 }
 
-export type TranspileTarget = 
-  | "curl" 
-  | "fetch-ts" 
-  | "python" 
-  | "go" 
-  | "rust" 
-  | "java" 
-  | "csharp" 
-  | "php";
+export type TranspileTarget = "curl" | "fetch-ts" | "python" | "go" | "rust" | "java" | "csharp" | "php";
 
 export type AssertionOperator = "=" | "!=" | ">" | "<" | ">=" | "<=" | "~=" | "exists";
 

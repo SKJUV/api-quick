@@ -1,4 +1,4 @@
-import { CliArguments, NetworkResponseSpec } from "../types/index.js";
+import type { CliArguments, NetworkResponseSpec } from "../types/index.js";
 import { formatError, formatSuccess } from "./formatter.js";
 
 export const POSIX_EXIT_CODES = {
@@ -6,8 +6,103 @@ export const POSIX_EXIT_CODES = {
   EXIT_ASSERTION_FAILED: 1,
   EXIT_NETWORK_TIMEOUT: 2,
   EXIT_SYNTAX_ERROR: 3,
-  EXIT_CRYPTO_AUTH_FAIL: 4
+  EXIT_CRYPTO_AUTH_FAIL: 4,
 } as const;
+
+export interface AssertionResult {
+  passed: boolean;
+  message: string;
+}
+
+export function resolveJsonPath(obj: any, path: string): any {
+  if (!obj || typeof obj !== "object") return undefined;
+
+  const cleanPath = path.replace(/^\$\./, "");
+  if (!cleanPath) return obj;
+
+  // Split by dot or bracket notation: e.g. "users[0].name" -> ["users", "0", "name"]
+  const tokens = cleanPath
+    .replace(/\[(\d+)\]/g, ".$1")
+    .split(".")
+    .filter(Boolean);
+  let current = obj;
+
+  for (const token of tokens) {
+    if (current !== null && current !== undefined && typeof current === "object" && token in current) {
+      current = current[token];
+    } else {
+      return undefined;
+    }
+  }
+
+  return current;
+}
+
+export function evaluateJsonAssertion(parsedBody: any, jsonPath: string, expectedVal: string): AssertionResult {
+  if (!parsedBody) {
+    return {
+      passed: false,
+      message: `Cannot evaluate JSONPath "${jsonPath}" on empty or non-JSON body`,
+    };
+  }
+
+  const actual = resolveJsonPath(parsedBody, jsonPath);
+
+  if (actual === undefined) {
+    return {
+      passed: false,
+      message: `JSONPath "${jsonPath}" resolved to undefined`,
+    };
+  }
+
+  // Support len= check for arrays/strings
+  if (expectedVal.startsWith("len=")) {
+    const targetLen = parseInt(expectedVal.slice(4), 10);
+    const actualLen = Array.isArray(actual) || typeof actual === "string" ? actual.length : Object.keys(actual).length;
+    const passed = actualLen === targetLen;
+    return {
+      passed,
+      message: passed
+        ? `JSONPath "${jsonPath}" length is ${actualLen}`
+        : `JSONPath "${jsonPath}" expected length ${targetLen}, got ${actualLen}`,
+    };
+  }
+
+  // Support type= check
+  if (expectedVal.startsWith("type=")) {
+    const targetType = expectedVal.slice(5).toLowerCase();
+    const actualType = Array.isArray(actual) ? "array" : typeof actual;
+    const passed = actualType === targetType;
+    return {
+      passed,
+      message: passed
+        ? `JSONPath "${jsonPath}" type is ${actualType}`
+        : `JSONPath "${jsonPath}" expected type "${targetType}", got "${actualType}"`,
+    };
+  }
+
+  // Support contains= check
+  if (expectedVal.startsWith("contains=")) {
+    const targetSubstring = expectedVal.slice(9);
+    const actualStr = String(actual);
+    const passed = actualStr.includes(targetSubstring);
+    return {
+      passed,
+      message: passed
+        ? `JSONPath "${jsonPath}" contains "${targetSubstring}"`
+        : `JSONPath "${jsonPath}" ("${actualStr}") does not contain "${targetSubstring}"`,
+    };
+  }
+
+  // Standard equality check
+  const passed = String(actual) === expectedVal;
+  return {
+    passed,
+    message: passed
+      ? `JSONPath "${jsonPath}" = "${actual}"`
+      : `JSONPath "${jsonPath}" expected "${expectedVal}", got "${actual}"`,
+  };
+}
 
 export function evaluateAssertions(args: CliArguments, res: NetworkResponseSpec): number {
   let allPassed = true;
@@ -25,10 +120,16 @@ export function evaluateAssertions(args: CliArguments, res: NetworkResponseSpec)
   // 2. Response Time Check
   if (args.expectMaxTimeMs !== undefined) {
     if (res.metrics.totalTimeMs > args.expectMaxTimeMs) {
-      console.error(formatError(`Assertion Failed: Response time ${res.metrics.totalTimeMs}ms exceeded max limit ${args.expectMaxTimeMs}ms`));
+      console.error(
+        formatError(
+          `Assertion Failed: Response time ${res.metrics.totalTimeMs}ms exceeded limit ${args.expectMaxTimeMs}ms`,
+        ),
+      );
       allPassed = false;
     } else {
-      console.log(formatSuccess(`Assertion Passed: Response time ${res.metrics.totalTimeMs}ms <= ${args.expectMaxTimeMs}ms`));
+      console.log(
+        formatSuccess(`Assertion Passed: Response time ${res.metrics.totalTimeMs}ms <= ${args.expectMaxTimeMs}ms`),
+      );
     }
   }
 
@@ -36,8 +137,12 @@ export function evaluateAssertions(args: CliArguments, res: NetworkResponseSpec)
   if (args.expectHeaders) {
     for (const [key, expectedVal] of Object.entries(args.expectHeaders)) {
       const actualVal = res.headers[key.toLowerCase()];
-      if (!actualVal || !actualVal.includes(expectedVal)) {
-        console.error(formatError(`Assertion Failed: Expected header "${key}" to contain "${expectedVal}", got "${actualVal || ""}"`));
+      if (!actualVal?.includes(expectedVal)) {
+        console.error(
+          formatError(
+            `Assertion Failed: Expected header "${key}" to contain "${expectedVal}", got "${actualVal || ""}"`,
+          ),
+        );
         allPassed = false;
       } else {
         console.log(formatSuccess(`Assertion Passed: Header "${key}" matched "${expectedVal}"`));
@@ -46,46 +151,22 @@ export function evaluateAssertions(args: CliArguments, res: NetworkResponseSpec)
   }
 
   // 4. JSONPath Assertions
-  let parsedBody: any;
+  let parsedBody: any = null;
   try {
     parsedBody = JSON.parse(res.body);
   } catch {
-    parsedBody = null;
+    // Non-JSON body
   }
 
   for (const assertion of args.expectAssertions) {
-    if (!parsedBody) {
-      console.error(formatError(`Assertion Failed: Cannot evaluate JSONPath "${assertion.jsonPath}" on non-JSON response body.`));
-      allPassed = false;
-      continue;
-    }
-
-    const actual = resolveSimpleJsonPath(parsedBody, assertion.jsonPath);
-    if (actual === undefined) {
-      console.error(formatError(`Assertion Failed: JSONPath "${assertion.jsonPath}" resolved to undefined.`));
-      allPassed = false;
-    } else if (String(actual) !== String(assertion.expectedValue)) {
-      console.error(formatError(`Assertion Failed: JSONPath "${assertion.jsonPath}" expected "${assertion.expectedValue}", got "${actual}"`));
-      allPassed = false;
+    const result = evaluateJsonAssertion(parsedBody, assertion.jsonPath, assertion.expectedValue);
+    if (result.passed) {
+      console.log(formatSuccess(`Assertion Passed: ${result.message}`));
     } else {
-      console.log(formatSuccess(`Assertion Passed: JSONPath "${assertion.jsonPath}" = "${actual}"`));
+      console.error(formatError(`Assertion Failed: ${result.message}`));
+      allPassed = false;
     }
   }
 
   return allPassed ? POSIX_EXIT_CODES.EXIT_SUCCESS : POSIX_EXIT_CODES.EXIT_ASSERTION_FAILED;
-}
-
-function resolveSimpleJsonPath(obj: any, path: string): any {
-  const cleanPath = path.replace(/^\$\./, "");
-  const parts = cleanPath.split(".");
-  let current = obj;
-
-  for (const part of parts) {
-    if (current && typeof current === "object" && part in current) {
-      current = current[part];
-    } else {
-      return undefined;
-    }
-  }
-  return current;
 }

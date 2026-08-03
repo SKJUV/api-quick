@@ -1,4 +1,5 @@
-import { CliArguments, HttpMethod, TranspileTarget, JsonAssertion } from "../types/index.js";
+import { interpolateVariables, loadConfig, resolveEnvironmentVariables } from "../core/config.js";
+import type { CliArguments, HttpMethod, JsonAssertion, TranspileTarget } from "../types/index.js";
 
 const HTTP_METHODS: HttpMethod[] = ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"];
 
@@ -7,31 +8,44 @@ export function parseCliArgs(args: string[]): CliArguments {
     throw new Error("No URL or command provided. Usage: api-quick [METHOD] <URL> [params...]");
   }
 
+  // 1. Detect --env parameter first to load target environment variables
+  let targetEnv: string | undefined;
+  const envIdx = args.indexOf("--env");
+  if (envIdx !== -1 && envIdx + 1 < args.length) {
+    targetEnv = args[envIdx + 1];
+  }
+
+  const config = loadConfig();
+  const envVars = resolveEnvironmentVariables(config, targetEnv);
+
+  // 2. Interpolate all raw arguments with environment variables
+  const processedArgs = args.map((arg) => interpolateVariables(arg, envVars));
+
   let method: HttpMethod = "GET";
   let url = "";
   let startIndex = 0;
 
-  const firstArgUpper = args[0].toUpperCase() as HttpMethod;
+  const firstArgUpper = processedArgs[0].toUpperCase() as HttpMethod;
   if (HTTP_METHODS.includes(firstArgUpper)) {
     method = firstArgUpper;
-    url = args[1];
+    url = processedArgs[1];
     startIndex = 2;
   } else {
-    url = args[0];
+    url = processedArgs[0];
     startIndex = 1;
   }
 
   if (!url || (!url.startsWith("http://") && !url.startsWith("https://"))) {
     if (url && (url.startsWith("localhost") || url.startsWith("127.0.0.1"))) {
-      url = "http://" + url;
+      url = `http://${url}`;
     } else if (url && !url.includes("://")) {
-      url = "https://" + url;
+      url = `https://${url}`;
     } else {
       throw new Error(`Invalid URL specified: "${url}"`);
     }
   }
 
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = { ...config?.globalHeaders };
   const params: Record<string, string> = {};
   const jsonBody: Record<string, any> = {};
   let transpileTarget: TranspileTarget | undefined;
@@ -40,21 +54,26 @@ export function parseCliArgs(args: string[]): CliArguments {
   const expectHeaders: Record<string, string> = {};
   const expectAssertions: JsonAssertion[] = [];
 
-  for (let i = startIndex; i < args.length; i++) {
-    const arg = args[i];
+  for (let i = startIndex; i < processedArgs.length; i++) {
+    const arg = processedArgs[i];
 
-    if (arg === "--to" && i + 1 < args.length) {
-      transpileTarget = args[++i] as TranspileTarget;
+    if (arg === "--env" && i + 1 < processedArgs.length) {
+      i++; // Skip value
       continue;
     }
 
-    if (arg === "--expect-status" && i + 1 < args.length) {
-      expectStatus = parseInt(args[++i], 10);
+    if (arg === "--to" && i + 1 < processedArgs.length) {
+      transpileTarget = processedArgs[++i] as TranspileTarget;
       continue;
     }
 
-    if (arg === "--expect-max-time" && i + 1 < args.length) {
-      const rawTime = args[++i];
+    if (arg === "--expect-status" && i + 1 < processedArgs.length) {
+      expectStatus = parseInt(processedArgs[++i], 10);
+      continue;
+    }
+
+    if (arg === "--expect-max-time" && i + 1 < processedArgs.length) {
+      const rawTime = processedArgs[++i];
       if (rawTime.endsWith("ms")) {
         expectMaxTimeMs = parseInt(rawTime.slice(0, -2), 10);
       } else if (rawTime.endsWith("s")) {
@@ -65,8 +84,8 @@ export function parseCliArgs(args: string[]): CliArguments {
       continue;
     }
 
-    if (arg === "--expect-header" && i + 1 < args.length) {
-      const headerPair = args[++i];
+    if (arg === "--expect-header" && i + 1 < processedArgs.length) {
+      const headerPair = processedArgs[++i];
       const idx = headerPair.indexOf("=");
       if (idx !== -1) {
         expectHeaders[headerPair.slice(0, idx).toLowerCase()] = headerPair.slice(idx + 1);
@@ -74,14 +93,13 @@ export function parseCliArgs(args: string[]): CliArguments {
       continue;
     }
 
-    if (arg === "--expect-json" && i + 2 < args.length) {
-      const jsonPath = args[++i];
-      const opAndVal = args[++i];
-      // e.g. "=" "200" or ">" "10"
+    if (arg === "--expect-json" && i + 2 < processedArgs.length) {
+      const jsonPath = processedArgs[++i];
+      const opAndVal = processedArgs[++i];
       expectAssertions.push({
         jsonPath,
         operator: "=",
-        expectedValue: opAndVal
+        expectedValue: opAndVal,
       });
       continue;
     }
@@ -118,7 +136,6 @@ export function parseCliArgs(args: string[]): CliArguments {
       } else {
         jsonBody[key] = val;
       }
-      continue;
     }
   }
 
@@ -141,6 +158,6 @@ export function parseCliArgs(args: string[]): CliArguments {
     expectStatus,
     expectMaxTimeMs,
     expectHeaders: Object.keys(expectHeaders).length > 0 ? expectHeaders : undefined,
-    expectAssertions
+    expectAssertions,
   };
 }

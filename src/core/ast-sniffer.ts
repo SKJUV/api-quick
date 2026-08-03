@@ -1,5 +1,16 @@
-import fs from "fs";
-import path from "path";
+import fs from "node:fs";
+import path from "node:path";
+
+export type SupportedFramework =
+  | "NestJS"
+  | "Express/Fastify/Hono"
+  | "Next.js"
+  | "FastAPI/Flask"
+  | "Django"
+  | "Go (Gin/Fiber/Echo)"
+  | "Spring Boot"
+  | "Laravel"
+  | "Generic";
 
 export interface DiscoveredRoute {
   id: string;
@@ -7,14 +18,13 @@ export interface DiscoveredRoute {
   path: string;
   file: string;
   line: number;
-  framework: "NestJS" | "Express/Fastify" | "Next.js" | "FastAPI/Flask" | "Django" | "Go" | "Spring Boot" | "Laravel" | "Generic";
+  framework: SupportedFramework;
   tag: string;
-  executionOrder: number; // 1 = Auth, 2 = Profile/User, 3 = Core Resources, 4 = Admin Ops
+  executionOrder: number;
   requiresAuth: boolean;
   description: string;
   suggestedHeaders?: Record<string, string>;
   suggestedBody?: Record<string, any>;
-  queryParams?: string[];
 }
 
 export function sniffProjectRoutes(targetDir: string = process.cwd()): DiscoveredRoute[] {
@@ -29,7 +39,20 @@ export function sniffProjectRoutes(targetDir: string = process.cwd()): Discovere
       for (const entry of entries) {
         const fullPath = path.join(dir, entry.name);
         if (entry.isDirectory()) {
-          if (["node_modules", ".git", "dist", "build", ".next", "venv", ".venv", "__pycache__", "target", "vendor"].includes(entry.name)) {
+          if (
+            [
+              "node_modules",
+              ".git",
+              "dist",
+              "build",
+              ".next",
+              "venv",
+              ".venv",
+              "__pycache__",
+              "target",
+              "vendor",
+            ].includes(entry.name)
+          ) {
             continue;
           }
           collectFiles(fullPath, depth + 1);
@@ -46,63 +69,44 @@ export function sniffProjectRoutes(targetDir: string = process.cwd()): Discovere
 
   collectFiles(targetDir);
 
-  function categorizeRoute(routePath: string, filename: string): { tag: string; executionOrder: number; requiresAuth: boolean; description: string } {
+  function categorizeRoute(
+    routePath: string,
+    filename: string,
+  ): { tag: string; executionOrder: number; requiresAuth: boolean; description: string } {
     const lowerPath = routePath.toLowerCase();
     const lowerFile = filename.toLowerCase();
 
-    if (lowerPath.includes("auth") || lowerPath.includes("login") || lowerPath.includes("register") || lowerPath.includes("sync") || lowerFile.includes("auth")) {
+    if (
+      lowerPath.includes("auth") ||
+      lowerPath.includes("login") ||
+      lowerPath.includes("register") ||
+      lowerPath.includes("sync") ||
+      lowerFile.includes("auth")
+    ) {
       const isPublic = lowerPath.includes("login") || lowerPath.includes("register");
       return {
         tag: "Authentication & Identity",
         executionOrder: 1,
         requiresAuth: !isPublic,
-        description: isPublic ? "Public authentication endpoint to obtain Bearer JWT access token." : "Authenticated session synchronization endpoint."
+        description: isPublic ? "Public authentication endpoint." : "Authenticated session endpoint.",
       };
     }
 
-    if (lowerPath.includes("me") || lowerPath.includes("profile") || lowerPath.includes("user/address")) {
+    if (lowerPath.includes("me") || lowerPath.includes("profile") || lowerPath.includes("user")) {
       return {
         tag: "User Profile & Account",
         executionOrder: 2,
         requiresAuth: true,
-        description: "User account management, addresses, and personal profile operations."
+        description: "User account management operations.",
       };
     }
 
-    if (lowerPath.includes("admin") || lowerPath.includes("dashboard") || lowerPath.includes("analytics") || lowerFile.includes("admin")) {
+    if (lowerPath.includes("admin") || lowerPath.includes("dashboard") || lowerFile.includes("admin")) {
       return {
         tag: "Administrative Operations",
         executionOrder: 4,
         requiresAuth: true,
-        description: "Restricted administrative metrics, staff management, and system configuration."
-      };
-    }
-
-    if (lowerPath.includes("product") || lowerPath.includes("categories") || lowerFile.includes("product")) {
-      const isRead = !lowerPath.includes("post") && !lowerPath.includes("delete");
-      return {
-        tag: "Product Catalog",
-        executionOrder: 3,
-        requiresAuth: !isRead,
-        description: "E-commerce product catalog, categories, and inventory listings."
-      };
-    }
-
-    if (lowerPath.includes("order") || lowerPath.includes("proposal") || lowerFile.includes("order")) {
-      return {
-        tag: "Orders & Workflows",
-        executionOrder: 3,
-        requiresAuth: true,
-        description: "Order creation, shipping calculations, proposal acceptance, and status workflows."
-      };
-    }
-
-    if (lowerPath.includes("wallet") || lowerPath.includes("recharge") || lowerFile.includes("wallet")) {
-      return {
-        tag: "Wallet & Financials",
-        executionOrder: 3,
-        requiresAuth: true,
-        description: "User digital wallet balance, recharge operations, and transaction history."
+        description: "Restricted administrative metrics and system configuration.",
       };
     }
 
@@ -111,27 +115,12 @@ export function sniffProjectRoutes(targetDir: string = process.cwd()): Discovere
       tag: tagName.charAt(0).toUpperCase() + tagName.slice(1),
       executionOrder: 3,
       requiresAuth: true,
-      description: `API operation for ${tagName} module.`
+      description: `API operation for ${tagName} module.`,
     };
   }
 
   function baseModuleName(filename: string): string {
     return path.basename(filename, path.extname(filename)).replace(/\.(routes|route|controller)$/, "");
-  }
-
-  // Scan file for req.body properties
-  function extractBodyProperties(content: string): Record<string, any> {
-    const props: Record<string, any> = {};
-    const matches = content.matchAll(/req\.body\.([a-zA-Z0-9_]+)/g);
-    for (const match of matches) {
-      const propName = match[1];
-      if (propName === "email") props[propName] = "user@example.com";
-      else if (propName === "password") props[propName] = "secretpassword";
-      else if (propName.includes("id") || propName.includes("Id")) props[propName] = 1;
-      else if (propName.includes("price") || propName.includes("amount")) props[propName] = 99.99;
-      else props[propName] = "sample_value";
-    }
-    return props;
   }
 
   let idCounter = 1;
@@ -142,70 +131,71 @@ export function sniffProjectRoutes(targetDir: string = process.cwd()): Discovere
       const lines = content.split("\n");
       const relPath = path.relative(targetDir, file);
       const baseFilename = baseModuleName(file);
-      const routeModuleName = baseFilename !== "index" && baseFilename !== "app" && baseFilename !== "server" ? baseFilename : "";
 
-      const extractedBodyProps = extractBodyProperties(content);
+      // Next.js App Router API Route detection (route.ts / route.js)
+      if (file.includes(path.join("app", "api")) && (file.endsWith("route.ts") || file.endsWith("route.js"))) {
+        const routeDir = path.dirname(relPath);
+        const apiPath = `/${routeDir.replace(/^.*app\//, "").replace(/\/route\.[jt]s$/, "")}`;
+        for (let index = 0; index < lines.length; index++) {
+          const lineText = lines[index];
+          const nextMatch = lineText.match(/export\s+async\s+function\s+(GET|POST|PUT|DELETE|PATCH|HEAD)\s*\(/i);
+          if (nextMatch) {
+            const method = nextMatch[1].toUpperCase();
+            const meta = categorizeRoute(apiPath, baseFilename);
+            routes.push({
+              id: `route-${idCounter++}`,
+              method,
+              path: apiPath,
+              file: relPath,
+              line: index + 1,
+              framework: "Next.js",
+              tag: meta.tag,
+              executionOrder: meta.executionOrder,
+              requiresAuth: meta.requiresAuth,
+              description: meta.description,
+            });
+          }
+        }
+      }
 
       lines.forEach((lineText, index) => {
         const lineNum = index + 1;
 
         // Express / Fastify / Hono: app.get("/path"), router.post("/path")
-        const expressMatch = lineText.match(/(?:app|router|server|instance|hono)\.(get|post|put|delete|patch|all)\s*\(\s*["']([^"']+)["']/i);
+        const expressMatch = lineText.match(
+          /(?:app|router|server|instance|hono)\.(get|post|put|delete|patch|all)\s*\(\s*["']([^"']+)["']/i,
+        );
         if (expressMatch) {
-          let rawPath = expressMatch[2];
-          if (!rawPath.startsWith("/")) rawPath = "/" + rawPath;
           const method = expressMatch[1].toUpperCase() === "ALL" ? "GET" : expressMatch[1].toUpperCase();
+          let rawPath = expressMatch[2];
+          if (!rawPath.startsWith("/")) rawPath = `/${rawPath}`;
 
-          // 1. Module name prefixed path
-          if (routeModuleName && !rawPath.startsWith("/" + routeModuleName)) {
-            const modulePath = "/" + routeModuleName + (rawPath === "/" ? "" : rawPath);
-            const prefixedPath = `/api/v1${modulePath}`;
-            
-            const meta = categorizeRoute(prefixedPath, baseFilename);
-            routes.push({
-              id: `route-${idCounter++}`,
-              method,
-              path: prefixedPath,
-              file: relPath,
-              line: lineNum,
-              framework: "Express/Fastify",
-              tag: meta.tag,
-              executionOrder: meta.executionOrder,
-              requiresAuth: meta.requiresAuth,
-              description: meta.description,
-              suggestedHeaders: meta.requiresAuth ? { Authorization: "Bearer <token>" } : undefined,
-              suggestedBody: ["POST", "PUT", "PATCH"].includes(method) ? (Object.keys(extractedBodyProps).length > 0 ? extractedBodyProps : { sample_field: "test_value" }) : undefined
-            });
-          }
-
-          // 2. Direct path
-          const metaDirect = categorizeRoute(rawPath, baseFilename);
+          const meta = categorizeRoute(rawPath, baseFilename);
           routes.push({
             id: `route-${idCounter++}`,
             method,
             path: rawPath,
             file: relPath,
             line: lineNum,
-            framework: "Express/Fastify",
-            tag: metaDirect.tag,
-            executionOrder: metaDirect.executionOrder,
-            requiresAuth: metaDirect.requiresAuth,
-            description: metaDirect.description,
-            suggestedHeaders: metaDirect.requiresAuth ? { Authorization: "Bearer <token>" } : undefined,
-            suggestedBody: ["POST", "PUT", "PATCH"].includes(method) ? (Object.keys(extractedBodyProps).length > 0 ? extractedBodyProps : { sample_field: "test_value" }) : undefined
+            framework: "Express/Fastify/Hono",
+            tag: meta.tag,
+            executionOrder: meta.executionOrder,
+            requiresAuth: meta.requiresAuth,
+            description: meta.description,
+            suggestedHeaders: meta.requiresAuth ? { Authorization: "Bearer <token>" } : undefined,
           });
           return;
         }
 
-        // NestJS Method Decorators
+        // NestJS Decorators: @Get('/path'), @Post('/path')
         if (file.includes("controller") || file.includes("Controller")) {
-          const nestMethodMatch = lineText.match(/@(Get|Post|Put|Delete|Patch)\s*\(\s*["'`]?([^"'`]*)["'`]?\s*\)/i);
-          if (nestMethodMatch) {
-            const method = nestMethodMatch[1].toUpperCase();
-            let subPath = nestMethodMatch[2] ? nestMethodMatch[2].trim() : "";
-            if (subPath && !subPath.startsWith("/")) subPath = "/" + subPath;
+          const nestMatch = lineText.match(/@(Get|Post|Put|Delete|Patch)\s*\(\s*["'`]?([^"'`]*)["'`]?\s*\)/i);
+          if (nestMatch) {
+            const method = nestMatch[1].toUpperCase();
+            let subPath = nestMatch[2] ? nestMatch[2].trim() : "";
+            if (subPath && !subPath.startsWith("/")) subPath = `/${subPath}`;
 
-            const meta = categorizeRoute(subPath, baseFilename);
+            const meta = categorizeRoute(subPath || "/", baseFilename);
             routes.push({
               id: `route-${idCounter++}`,
               method,
@@ -217,18 +207,103 @@ export function sniffProjectRoutes(targetDir: string = process.cwd()): Discovere
               executionOrder: meta.executionOrder,
               requiresAuth: meta.requiresAuth,
               description: meta.description,
-              suggestedHeaders: meta.requiresAuth ? { Authorization: "Bearer <token>" } : undefined,
-              suggestedBody: ["POST", "PUT", "PATCH"].includes(method) ? (Object.keys(extractedBodyProps).length > 0 ? extractedBodyProps : { sample_field: "value" }) : undefined
             });
             return;
           }
         }
+
+        // Python FastAPI / Flask: @app.get("/path"), @router.post("/path"), @app.route("/path", methods=["POST"])
+        const pyMatch = lineText.match(/@(app|router|api)\.(get|post|put|delete|patch|route)\s*\(\s*["']([^"']+)["']/i);
+        if (pyMatch) {
+          const method = pyMatch[2].toUpperCase() === "ROUTE" ? "GET" : pyMatch[2].toUpperCase();
+          const rawPath = pyMatch[3];
+          const meta = categorizeRoute(rawPath, baseFilename);
+          routes.push({
+            id: `route-${idCounter++}`,
+            method,
+            path: rawPath,
+            file: relPath,
+            line: lineNum,
+            framework: "FastAPI/Flask",
+            tag: meta.tag,
+            executionOrder: meta.executionOrder,
+            requiresAuth: meta.requiresAuth,
+            description: meta.description,
+          });
+          return;
+        }
+
+        // Go Gin / Fiber / Echo: r.GET("/path", ...), app.Post("/path", ...)
+        const goMatch = lineText.match(
+          /(?:r|app|router|e|group|api)\.(GET|POST|PUT|DELETE|PATCH|Get|Post|Put|Delete|Patch)\s*\(\s*["']([^"']+)["']/i,
+        );
+        if (goMatch) {
+          const method = goMatch[1].toUpperCase();
+          const rawPath = goMatch[2];
+          const meta = categorizeRoute(rawPath, baseFilename);
+          routes.push({
+            id: `route-${idCounter++}`,
+            method,
+            path: rawPath,
+            file: relPath,
+            line: lineNum,
+            framework: "Go (Gin/Fiber/Echo)",
+            tag: meta.tag,
+            executionOrder: meta.executionOrder,
+            requiresAuth: meta.requiresAuth,
+            description: meta.description,
+          });
+          return;
+        }
+
+        // Java Spring Boot: @GetMapping("/path"), @PostMapping("/path")
+        const springMatch = lineText.match(
+          /@(Get|Post|Put|Delete|Patch)Mapping\s*\(\s*(?:value\s*=\s*)?["']([^"']+)["']/i,
+        );
+        if (springMatch) {
+          const method = springMatch[1].toUpperCase();
+          const rawPath = springMatch[2];
+          const meta = categorizeRoute(rawPath, baseFilename);
+          routes.push({
+            id: `route-${idCounter++}`,
+            method,
+            path: rawPath,
+            file: relPath,
+            line: lineNum,
+            framework: "Spring Boot",
+            tag: meta.tag,
+            executionOrder: meta.executionOrder,
+            requiresAuth: meta.requiresAuth,
+            description: meta.description,
+          });
+          return;
+        }
+
+        // PHP Laravel: Route::get('/path', ...), Route::post('/path', ...)
+        const laravelMatch = lineText.match(/Route::(get|post|put|delete|patch)\s*\(\s*["']([^"']+)["']/i);
+        if (laravelMatch) {
+          const method = laravelMatch[1].toUpperCase();
+          const rawPath = laravelMatch[2].startsWith("/") ? laravelMatch[2] : `/${laravelMatch[2]}`;
+          const meta = categorizeRoute(rawPath, baseFilename);
+          routes.push({
+            id: `route-${idCounter++}`,
+            method,
+            path: rawPath,
+            file: relPath,
+            line: lineNum,
+            framework: "Laravel",
+            tag: meta.tag,
+            executionOrder: meta.executionOrder,
+            requiresAuth: meta.requiresAuth,
+            description: meta.description,
+          });
+          return;
+        }
       });
     } catch {
-      // Ignore unreadable files
+      // Ignore unreadable file
     }
   }
 
-  // Sort routes by execution order priority
   return routes.sort((a, b) => a.executionOrder - b.executionOrder || a.path.localeCompare(b.path));
 }
