@@ -1,8 +1,13 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { evaluateJsonAssertion } from "../cli/assertions.js";
 import { sniffProjectRoutes } from "../core/ast-sniffer.js";
 import { BenchmarkEngine, type BenchmarkOptions } from "../core/benchmark.js";
+import { loadConfig, resolveEnvironmentVariables } from "../core/config.js";
+import { compareJsonStructures } from "../core/diff.js";
+import { transpileToCode } from "../core/transpiler.js";
 import { WorkflowEngine, type WorkflowStep } from "../core/workflow.js";
+import type { TranspileTarget } from "../types/index.js";
 
 export interface ExecutionLog {
   id: string;
@@ -25,7 +30,7 @@ export function createWebServer(currentPort: number = 4000) {
 
   app.use("*", cors({ origin: "*", allowMethods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"] }));
 
-  app.get("/api/health", (c) => c.json({ status: "ok", engine: "api-quick", version: "1.0.0" }));
+  app.get("/api/health", (c) => c.json({ status: "ok", engine: "api-quick", version: "1.1.0" }));
 
   app.get("/api/routes", (c) => {
     const rawRoutes = sniffProjectRoutes();
@@ -37,6 +42,108 @@ export function createWebServer(currentPort: number = 4000) {
       return true;
     });
     return c.json({ routes: deduplicatedRoutes, count: deduplicatedRoutes.length });
+  });
+
+  // Polyglot Code Transpiler API
+  app.post("/api/transpile", async (c) => {
+    try {
+      const body = await c.req.json();
+      const target = (body.target || "curl") as TranspileTarget;
+      const code = transpileToCode(
+        {
+          method: body.method || "GET",
+          url: body.url || "",
+          headers: body.headers || {},
+          params: body.params || {},
+          jsonBody: body.jsonBody,
+          rawBody: body.rawBody,
+          expectAssertions: [],
+        },
+        target,
+      );
+      return c.json({ code });
+    } catch (err: any) {
+      return c.json({ error: err.message }, 500);
+    }
+  });
+
+  // Structural JSON Diff API
+  app.post("/api/diff", async (c) => {
+    try {
+      const body = await c.req.json();
+      let json1 = body.json1;
+      let json2 = body.json2;
+
+      // If URLs passed instead of raw JSON
+      if (body.url1 && body.url2) {
+        const [res1, res2] = await Promise.all([fetch(body.url1), fetch(body.url2)]);
+        json1 = await res1.json();
+        json2 = await res2.json();
+      }
+
+      const diff = compareJsonStructures(json1, json2);
+      return c.json({ diff });
+    } catch (err: any) {
+      return c.json({ error: err.message }, 500);
+    }
+  });
+
+  // Environment & Config API
+  app.get("/api/config", (c) => {
+    const config = loadConfig();
+    const envName = c.req.query("env");
+    const variables = resolveEnvironmentVariables(config, envName);
+    return c.json({
+      config: config || null,
+      activeEnvironment: envName || config?.defaultEnvironment || "default",
+      environments: config?.environments ? Object.keys(config.environments) : ["default"],
+      variables,
+    });
+  });
+
+  // Assertions Evaluation API
+  app.post("/api/assertions/evaluate", async (c) => {
+    try {
+      const { responseBody, status, responseTimeMs, assertions, expectStatus, expectMaxTimeMs } = await c.req.json();
+      let parsedBody: any = null;
+      try {
+        parsedBody = typeof responseBody === "string" ? JSON.parse(responseBody) : responseBody;
+      } catch {
+        // Non-JSON
+      }
+
+      const results: Array<{ passed: boolean; message: string }> = [];
+
+      if (expectStatus !== undefined) {
+        const passed = status === expectStatus;
+        results.push({
+          passed,
+          message: passed ? `HTTP Status is ${status}` : `Expected HTTP status ${expectStatus}, got ${status}`,
+        });
+      }
+
+      if (expectMaxTimeMs !== undefined) {
+        const passed = responseTimeMs <= expectMaxTimeMs;
+        results.push({
+          passed,
+          message: passed
+            ? `Response time ${responseTimeMs}ms <= ${expectMaxTimeMs}ms`
+            : `Response time ${responseTimeMs}ms > ${expectMaxTimeMs}ms`,
+        });
+      }
+
+      if (Array.isArray(assertions)) {
+        for (const a of assertions) {
+          const res = evaluateJsonAssertion(parsedBody, a.jsonPath, a.expectedValue);
+          results.push(res);
+        }
+      }
+
+      const allPassed = results.every((r) => r.passed);
+      return c.json({ results, allPassed });
+    } catch (err: any) {
+      return c.json({ error: err.message }, 500);
+    }
   });
 
   // E2E Workflow Execution API
@@ -107,7 +214,7 @@ export function createWebServer(currentPort: number = 4000) {
       openapi: "3.0.3",
       info: {
         title: "Discovered Project API Documentation",
-        version: "1.0.0",
+        version: "1.1.0",
         description: "Auto-generated OpenAPI 3.0 specification from AST source code analysis by api-quick.",
       },
       components: {
@@ -247,7 +354,7 @@ function getWebUiHtml(): string {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>api-quick — Liquid Glass API Workbench</title>
+  <title>api-quick — Universal Web Workbench</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -300,7 +407,6 @@ function getWebUiHtml(): string {
       overflow: hidden;
     }
 
-    /* iOS Liquid Glass Card Base */
     .glass {
       background: var(--glass-panel);
       backdrop-filter: blur(16px) saturate(180%);
@@ -369,7 +475,7 @@ function getWebUiHtml(): string {
     main {
       flex: 2;
       display: grid;
-      grid-template-columns: 380px 1fr 1fr;
+      grid-template-columns: 360px 1fr 1fr;
       gap: 12px;
       overflow: hidden;
     }
@@ -405,24 +511,6 @@ function getWebUiHtml(): string {
       color: var(--text);
       font-size: 0.8rem;
     }
-    .search-input-box select {
-      padding: 6px 10px;
-      font-size: 0.78rem;
-      border-radius: 8px;
-    }
-
-    .group-header {
-      background: rgba(56, 189, 248, 0.08);
-      border-left: 3px solid var(--accent);
-      padding: 6px 12px;
-      font-size: 0.72rem;
-      font-weight: 700;
-      color: var(--accent);
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      margin-top: 8px;
-      border-radius: 4px;
-    }
 
     .route-list {
       flex: 1;
@@ -444,12 +532,7 @@ function getWebUiHtml(): string {
       border-color: var(--glass-border-hover);
       transform: translateY(-1px);
     }
-    .route-top {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 4px;
-    }
+    
     .method-badge {
       font-weight: 700;
       font-size: 0.65rem;
@@ -462,31 +545,6 @@ function getWebUiHtml(): string {
     .method-PUT { background: rgba(245, 158, 11, 0.15); color: var(--yellow); border: 1px solid rgba(245, 158, 11, 0.3); }
     .method-PATCH { background: rgba(168, 85, 247, 0.15); color: var(--purple); border: 1px solid rgba(168, 85, 247, 0.3); }
     .method-DELETE { background: rgba(244, 63, 94, 0.15); color: var(--red); border: 1px solid rgba(244, 63, 94, 0.3); }
-    
-    .route-path {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 0.8rem;
-      font-weight: 600;
-      color: var(--text);
-      word-break: break-all;
-    }
-    .route-meta {
-      font-size: 0.72rem;
-      color: var(--text-muted);
-      margin-top: 4px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-
-    .sec-badge {
-      font-size: 0.65rem;
-      padding: 2px 7px;
-      border-radius: 20px;
-      font-weight: 600;
-    }
-    .sec-auth { background: rgba(244, 63, 94, 0.1); color: var(--red); border: 1px solid rgba(244, 63, 94, 0.3); }
-    .sec-public { background: rgba(16, 185, 129, 0.1); color: var(--green); border: 1px solid rgba(16, 185, 129, 0.3); }
 
     .request-bar {
       display: flex;
@@ -504,18 +562,9 @@ function getWebUiHtml(): string {
       padding: 8px 12px;
       outline: none;
     }
-    select {
-      color: var(--accent);
-      font-weight: 600;
-      cursor: pointer;
-    }
-    input[type="text"] {
-      flex: 1;
-      font-family: 'JetBrains Mono', monospace;
-    }
-    input[type="text"]:focus {
-      border-color: var(--accent);
-    }
+    select { color: var(--accent); font-weight: 600; cursor: pointer; }
+    input[type="text"] { flex: 1; font-family: 'JetBrains Mono', monospace; }
+    input[type="text"]:focus { border-color: var(--accent); }
     button.btn-primary {
       background: var(--primary);
       color: white;
@@ -527,7 +576,6 @@ function getWebUiHtml(): string {
       display: flex;
       align-items: center;
       gap: 6px;
-      transition: background 0.15s;
     }
     button.btn-primary:hover { background: var(--primary-hover); }
     button.btn-secondary {
@@ -543,27 +591,15 @@ function getWebUiHtml(): string {
       border-radius: 8px;
       font-size: 0.78rem;
     }
-    button.btn-secondary:hover { border-color: var(--glass-border-hover); }
 
     .form-group {
-      padding: 12px 14px;
+      padding: 10px 14px;
       display: flex;
       flex-direction: column;
       gap: 6px;
     }
-    label {
-      font-size: 0.72rem;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      font-weight: 600;
-      letter-spacing: 0.5px;
-    }
-    textarea {
-      height: 120px;
-      font-family: 'JetBrains Mono', monospace;
-      resize: vertical;
-    }
-    textarea:focus { border-color: var(--accent); }
+    label { font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600; }
+    textarea { height: 90px; font-family: 'JetBrains Mono', monospace; resize: vertical; }
 
     pre {
       font-family: 'JetBrains Mono', monospace;
@@ -585,9 +621,8 @@ function getWebUiHtml(): string {
     .status-2xx { background: rgba(16, 185, 129, 0.15); color: var(--green); border: 1px solid rgba(16, 185, 129, 0.3); }
     .status-4xx, .status-5xx { background: rgba(244, 63, 94, 0.15); color: var(--red); border: 1px solid rgba(244, 63, 94, 0.3); }
 
-    /* Bottom Activity Drawer */
     .activity-drawer {
-      height: 180px;
+      height: 160px;
       display: flex;
       flex-direction: column;
       overflow: hidden;
@@ -607,14 +642,8 @@ function getWebUiHtml(): string {
       padding: 10px 12px;
       min-width: 270px;
       cursor: pointer;
-      transition: all 0.15s;
     }
-    .log-item:hover { border-color: var(--accent); }
-    .log-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
-    .log-url { font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .log-meta { font-size: 0.72rem; color: var(--text-muted); margin-top: 4px; display: flex; justify-content: space-between; }
 
-    /* Modal Overlay UI */
     .modal-backdrop {
       display: none;
       position: fixed;
@@ -626,8 +655,8 @@ function getWebUiHtml(): string {
       justify-content: center;
     }
     .modal-box {
-      width: 620px;
-      max-width: 90vw;
+      width: 650px;
+      max-width: 92vw;
       display: flex;
       flex-direction: column;
       overflow: hidden;
@@ -638,25 +667,9 @@ function getWebUiHtml(): string {
       display: flex;
       flex-direction: column;
       gap: 14px;
-      max-height: 70vh;
+      max-height: 75vh;
       overflow-y: auto;
     }
-    .guide-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 0.8rem;
-      margin-top: 6px;
-    }
-    .guide-table th, .guide-table td {
-      border: 1px solid var(--glass-border);
-      padding: 10px 12px;
-      text-align: left;
-    }
-    .guide-table th {
-      background: rgba(0,0,0,0.15);
-      color: var(--accent);
-    }
-    
     svg.icon { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
   </style>
 </head>
@@ -666,71 +679,70 @@ function getWebUiHtml(): string {
     <div class="logo">
       <svg class="icon" style="width:20px; height:20px; stroke: var(--accent);" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
       api-quick
-      <span class="badge">v1.0.0 Liquid Engine</span>
+      <span class="badge">v1.1.0 Liquid Workbench</span>
     </div>
     <div class="header-right">
-      <button id="authGuideBtn" class="btn-secondary" style="color: var(--accent); border-color: rgba(56, 189, 248, 0.4);">
-        <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
-        Auth Guide
+      <button id="transpileModalBtn" class="btn-primary" style="background: var(--primary);">
+        <svg class="icon" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+        Transpile Code
       </button>
-      <button id="runWorkflowBtn" class="btn-primary" style="background: var(--purple);">
-        <svg class="icon" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-        Run E2E Workflow
+      <button id="diffModalBtn" class="btn-primary" style="background: var(--purple);">
+        <svg class="icon" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+        JSON Diff Engine
       </button>
       <button id="runBenchBtn" class="btn-primary" style="background: var(--yellow); color: #000;">
-        <svg class="icon" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
-        Load Test
+        <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+        Load Benchmark
       </button>
       <a href="/api/openapi.json" target="_blank" class="btn-secondary" style="text-decoration:none;">
-        <svg class="icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
         OpenAPI 3.0
       </a>
       <button id="themeToggleBtn" class="btn-secondary">
-        <svg class="icon" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
         <span id="themeLabel">Dark</span>
       </button>
     </div>
   </header>
 
   <div class="layout-container">
-    <!-- Config Bar for Backend Host, Port, and Authorization Token -->
     <div class="base-url-bar glass">
       <div class="base-url-left">
-        <span style="color: var(--text-muted); font-weight: 600;">Target Host:</span>
-        <input type="text" id="baseHostInput" value="http://localhost:4000" style="width: 200px; padding: 5px 10px; font-size: 0.82rem;" />
+        <span style="color: var(--text-muted); font-weight: 600;">Environment:</span>
+        <select id="envSelect" style="padding: 4px 8px; font-size: 0.8rem;">
+          <option value="default">Default</option>
+        </select>
+
+        <span style="color: var(--text-muted); font-weight: 600; margin-left: 10px;">Target Host:</span>
+        <input type="text" id="baseHostInput" value="http://localhost:4000" style="width: 200px; padding: 4px 10px; font-size: 0.82rem;" />
+
         <span style="color: var(--text-muted); font-weight: 600; margin-left: 10px;">Bearer Auth Token:</span>
-        <input type="text" id="authTokenInput" placeholder="Paste Bearer Token or run /sync to auto-capture..." style="flex: 1; padding: 5px 10px; font-size: 0.82rem; color: var(--accent);" />
+        <input type="text" id="authTokenInput" placeholder="Paste JWT Bearer Token or run /sync..." style="flex: 1; padding: 4px 10px; font-size: 0.82rem; color: var(--accent);" />
       </div>
       <div id="activePortsNotice" style="color: var(--green); font-size: 0.8rem; font-weight: 500;"></div>
     </div>
 
     <main>
-      <!-- Left Sidebar: Discovered Routes Catalog Grouped by OpenAPI Tag & Execution Flow -->
+      <!-- Left Sidebar: Discovered Routes Catalog -->
       <div class="card glass">
         <div class="card-header">
           <span>Swagger Grouped Routes (<span id="routeCount">0</span>)</span>
-          <button id="resniffBtn" class="btn-secondary">
-            <svg class="icon" viewBox="0 0 24 24"><path d="M21.5 2v6h-6M2.13 15.57a10 10 0 1 0 4-13.84L1.5 8"></path></svg>
-            Refresh AST
-          </button>
+          <button id="resniffBtn" class="btn-secondary">Refresh AST</button>
         </div>
         <div class="search-input-box">
-          <input type="text" id="routeSearchInput" placeholder="Filter routes by path, tag, or method..." />
+          <input type="text" id="routeSearchInput" placeholder="Filter routes..." />
           <select id="secFilterSelect">
-            <option value="all">All Routes</option>
-            <option value="auth">Token Required</option>
+            <option value="all">All</option>
+            <option value="auth">Auth Required</option>
             <option value="public">Public</option>
           </select>
         </div>
-        <div id="routeList" class="route-list">
-          <div style="padding: 16px; color: var(--text-muted); font-size: 0.8rem;">Scanning workspace directory...</div>
-        </div>
+        <div id="routeList" class="route-list"></div>
       </div>
 
-      <!-- Request Panel -->
+      <!-- Center: HTTP Request Builder & Assertions -->
       <div class="card glass">
         <div class="card-header">
           <span>HTTP Request Builder</span>
+          <button id="openTranspileBtn" class="btn-secondary">Code Generator</button>
         </div>
         <div class="request-bar">
           <select id="methodSelect">
@@ -740,414 +752,412 @@ function getWebUiHtml(): string {
             <option value="PATCH">PATCH</option>
             <option value="DELETE">DELETE</option>
           </select>
-          <input type="text" id="urlInput" value="http://localhost:4000/api/v1/auth/sync" placeholder="Enter target request URL..." />
-          <button class="btn-primary" id="sendBtn">
-            <svg class="icon" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
-            Execute
-          </button>
+          <input type="text" id="urlInput" value="http://localhost:4000/api/v1/auth/sync" />
+          <button class="btn-primary" id="sendBtn">Execute</button>
         </div>
 
         <div class="form-group">
           <label>Headers (JSON)</label>
-          <textarea id="headersInput">{\n  "Accept": "application/json"\n}</textarea>
+          <textarea id="headersInput" placeholder='{ "X-Custom-Header": "value" }'></textarea>
         </div>
 
         <div class="form-group">
-          <label>JSON Body Payload</label>
-          <textarea id="bodyInput" placeholder='{\n  "email": "user@example.com",\n  "password": "yourpassword"\n}'></textarea>
+          <label>Request Body (JSON)</label>
+          <textarea id="bodyInput" placeholder='{ "email": "user@example.com" }'></textarea>
+        </div>
+
+        <div class="form-group">
+          <label>CI Assertions (Optional)</label>
+          <div style="display: flex; gap: 8px;">
+            <input type="text" id="expectStatusInput" placeholder="Status Code (e.g. 200)" style="width: 140px;" />
+            <input type="text" id="expectMaxTimeInput" placeholder="Max Time ms (e.g. 200)" style="width: 150px;" />
+            <input type="text" id="expectJsonInput" placeholder="JSONPath=Value (e.g. $.status=OK)" style="flex:1;" />
+          </div>
         </div>
       </div>
 
-      <!-- Response Panel -->
+      <!-- Right Panel: Response Viewer & Assertion Verification Results -->
       <div class="card glass">
         <div class="card-header">
-          <span>Response Inspector & Diagnostics</span>
-          <span id="metricsBadge" class="status-tag" style="display:none;"></span>
+          <span>Response Telemetry</span>
+          <div id="metricsBadge" class="status-tag" style="display: none;"></div>
         </div>
-        <pre id="responseOutput">// Select any discovered route from the left sidebar to execute request.</pre>
+        <div id="assertionResultsBox" style="display:none; padding: 10px 14px; border-bottom: 1px solid var(--glass-border); font-size: 0.78rem;"></div>
+        <pre id="responseOutput">Send a request to see output telemetry...</pre>
       </div>
     </main>
 
-    <!-- Bottom Activity Drawer: Action Execution Telemetry Logs -->
+    <!-- Bottom Log Drawer -->
     <div class="activity-drawer glass">
       <div class="card-header">
         <span>Execution Telemetry Logs</span>
-        <button id="clearLogsBtn" class="btn-secondary" style="color: var(--red); border-color: rgba(244, 63, 94, 0.3);">
-          <svg class="icon" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-          Clear Logs
-        </button>
+        <button id="clearLogsBtn" class="btn-secondary">Clear Logs</button>
       </div>
-      <div id="logList" class="log-list">
-        <div style="padding: 14px; color: var(--text-muted); font-size: 0.8rem;">No execution logs recorded.</div>
+      <div id="logList" class="log-list"></div>
+    </div>
+  </div>
+
+  <!-- Transpile Modal -->
+  <div id="transpileModal" class="modal-backdrop">
+    <div class="modal-box glass">
+      <div class="card-header">
+        <span>Polyglot Code Generator</span>
+        <button class="btn-secondary" onclick="document.getElementById('transpileModal').style.display='none'">✕ Close</button>
+      </div>
+      <div class="modal-body">
+        <div style="display: flex; gap: 10px; align-items: center;">
+          <label>Target Language:</label>
+          <select id="transpileTargetSelect">
+            <option value="curl">cURL (CLI)</option>
+            <option value="fetch-ts">TypeScript (fetch)</option>
+            <option value="python">Python (requests)</option>
+            <option value="go">Go (net/http)</option>
+            <option value="rust">Rust (reqwest)</option>
+            <option value="java">Java (HttpClient)</option>
+            <option value="csharp">C# (HttpClient)</option>
+            <option value="php">PHP (curl)</option>
+          </select>
+          <button id="copyTranspileBtn" class="btn-secondary">Copy Code</button>
+        </div>
+        <pre id="transpileCodeOutput">Generating code...</pre>
       </div>
     </div>
   </div>
 
-  <!-- Auth Guide Modal UI -->
-  <div id="guideModalBackdrop" class="modal-backdrop">
+  <!-- JSON Diff Modal -->
+  <div id="diffModal" class="modal-backdrop">
     <div class="modal-box glass">
       <div class="card-header">
-        <span>Authentication & JWT Token Guide</span>
-        <button id="closeGuideModalBtn" class="btn-secondary">X</button>
+        <span>Structural JSON Diff Engine</span>
+        <button class="btn-secondary" onclick="document.getElementById('diffModal').style.display='none'">✕ Close</button>
       </div>
       <div class="modal-body">
-        <p>This guide explains how JWT Bearer Tokens are automatically captured and injected into your requests across different framework architectures.</p>
-        
-        <table class="guide-table">
-          <thead>
-            <tr>
-              <th>Framework</th>
-              <th>Login Endpoint</th>
-              <th>Token JSON Response Key</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td><strong>Express / Node.js (Papyrus)</strong></td>
-              <td><code>POST /api/v1/auth/sync</code></td>
-              <td><code>{ "token": "eyJhbG..." }</code></td>
-            </tr>
-            <tr>
-              <td><strong>NestJS (TypeScript)</strong></td>
-              <td><code>POST /auth/login</code></td>
-              <td><code>{ "accessToken": "eyJhbG..." }</code></td>
-            </tr>
-            <tr>
-              <td><strong>FastAPI (Python)</strong></td>
-              <td><code>POST /token</code></td>
-              <td><code>{ "access_token": "eyJhbG..." }</code></td>
-            </tr>
-            <tr>
-              <td><strong>Django REST</strong></td>
-              <td><code>POST /api/token/</code></td>
-              <td><code>{ "access": "eyJhbG..." }</code></td>
-            </tr>
-            <tr>
-              <td><strong>Laravel Sanctum (PHP)</strong></td>
-              <td><code>POST /api/login</code></td>
-              <td><code>{ "token": "eyJhbG..." }</code></td>
-            </tr>
-          </tbody>
-        </table>
-
-        <div style="background: rgba(56, 189, 248, 0.08); padding: 12px; border-radius: 8px; border: 1px solid var(--glass-border); font-size: 0.78rem; margin-top: 6px;">
-          <strong>Automatic Token Injection:</strong><br />
-          When you execute any login endpoint that returns a token key, <code>api-quick</code> recursively extracts the token and populates the <code>Bearer Auth Token</code> header bar automatically!
+        <div class="form-group">
+          <label>URL 1 or JSON Payload 1:</label>
+          <input type="text" id="diffUrl1" placeholder="https://api.example.com/v1/users/1" />
         </div>
+        <div class="form-group">
+          <label>URL 2 or JSON Payload 2:</label>
+          <input type="text" id="diffUrl2" placeholder="https://api.example.com/v2/users/1" />
+        </div>
+        <button id="runDiffBtn" class="btn-primary">Compare Structures</button>
+        <pre id="diffOutput">Diff results will appear here...</pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- Load Benchmark Modal -->
+  <div id="benchModal" class="modal-backdrop">
+    <div class="modal-box glass">
+      <div class="card-header">
+        <span>High-Throughput Load Benchmark</span>
+        <button class="btn-secondary" onclick="document.getElementById('benchModal').style.display='none'">✕ Close</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Target URL:</label>
+          <input type="text" id="benchUrlInput" value="http://localhost:4000/api/health" />
+        </div>
+        <div style="display: flex; gap: 10px;">
+          <div class="form-group" style="flex:1;">
+            <label>Total Requests (-n):</label>
+            <input type="text" id="benchRequestsInput" value="100" />
+          </div>
+          <div class="form-group" style="flex:1;">
+            <label>Concurrency (-c):</label>
+            <input type="text" id="benchConcurrencyInput" value="10" />
+          </div>
+        </div>
+        <button id="startBenchBtn" class="btn-primary" style="background: var(--yellow); color: #000;">Run Benchmark</button>
+        <pre id="benchOutput">Benchmark metrics will be displayed here...</pre>
       </div>
     </div>
   </div>
 
   <script>
-    const routeList = document.getElementById('routeList');
-    const routeCount = document.getElementById('routeCount');
-    const routeSearchInput = document.getElementById('routeSearchInput');
-    const secFilterSelect = document.getElementById('secFilterSelect');
-    const resniffBtn = document.getElementById('resniffBtn');
-    const sendBtn = document.getElementById('sendBtn');
     const methodSelect = document.getElementById('methodSelect');
     const urlInput = document.getElementById('urlInput');
     const headersInput = document.getElementById('headersInput');
     const bodyInput = document.getElementById('bodyInput');
+    const sendBtn = document.getElementById('sendBtn');
     const responseOutput = document.getElementById('responseOutput');
     const metricsBadge = document.getElementById('metricsBadge');
+    const routeList = document.getElementById('routeList');
+    const routeSearchInput = document.getElementById('routeSearchInput');
+    const secFilterSelect = document.getElementById('secFilterSelect');
     const logList = document.getElementById('logList');
-    const clearLogsBtn = document.getElementById('clearLogsBtn');
     const baseHostInput = document.getElementById('baseHostInput');
     const authTokenInput = document.getElementById('authTokenInput');
     const activePortsNotice = document.getElementById('activePortsNotice');
     const themeToggleBtn = document.getElementById('themeToggleBtn');
     const themeLabel = document.getElementById('themeLabel');
-    const runWorkflowBtn = document.getElementById('runWorkflowBtn');
-    const runBenchBtn = document.getElementById('runBenchBtn');
-    const authGuideBtn = document.getElementById('authGuideBtn');
-    const guideModalBackdrop = document.getElementById('guideModalBackdrop');
-    const closeGuideModalBtn = document.getElementById('closeGuideModalBtn');
+    const envSelect = document.getElementById('envSelect');
 
     let allRoutes = [];
-    let allLogs = [];
-    const themes = ['dark', 'light'];
-    let currentThemeIdx = 0;
 
+    // Theme Switcher
     themeToggleBtn.addEventListener('click', () => {
-      currentThemeIdx = (currentThemeIdx + 1) % themes.length;
-      const nextTheme = themes[currentThemeIdx];
-      document.documentElement.setAttribute('data-theme', nextTheme);
-      themeLabel.textContent = nextTheme.toUpperCase();
+      const html = document.documentElement;
+      const current = html.getAttribute('data-theme');
+      const next = current === 'dark' ? 'light' : 'dark';
+      html.setAttribute('data-theme', next);
+      themeLabel.textContent = next.charAt(0).toUpperCase() + next.slice(1);
     });
 
-    authGuideBtn.addEventListener('click', () => {
-      guideModalBackdrop.style.display = 'flex';
-    });
-
-    closeGuideModalBtn.addEventListener('click', () => {
-      guideModalBackdrop.style.display = 'none';
-    });
-
-    guideModalBackdrop.addEventListener('click', (e) => {
-      if (e.target === guideModalBackdrop) guideModalBackdrop.style.display = 'none';
-    });
-
-    runBenchBtn.addEventListener('click', async () => {
-      const url = urlInput.value.trim();
-      if (!url) return alert('Please select a route to benchmark');
-
-      responseOutput.textContent = 'Running High-Throughput Concurrent Load Benchmark (100 requests, 10 workers)...';
-      metricsBadge.style.display = 'none';
-
+    // Load Environments & Config
+    async function loadConfigEnvs() {
       try {
-        const res = await fetch('/api/benchmark/run', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            url,
-            method: methodSelect.value,
-            totalRequests: 100,
-            concurrency: 10
-          })
-        });
-
+        const res = await fetch('/api/config');
         const data = await res.json();
-        responseOutput.textContent = JSON.stringify(data.result, null, 2);
-        
-        metricsBadge.style.display = 'inline-block';
-        metricsBadge.className = 'status-tag status-2xx';
-        metricsBadge.textContent = \`Benchmark: \${data.result.requestsPerSecond} req/s (p95: \${data.result.p95Ms}ms)\`;
-
-      } catch (err) {
-        responseOutput.textContent = 'Benchmark Error: ' + err.message;
-      }
-    });
-
-    runWorkflowBtn.addEventListener('click', async () => {
-      responseOutput.textContent = 'Running Full E2E Workflow Test Scenario...';
-      metricsBadge.style.display = 'none';
-
-      const baseHost = baseHostInput.value.trim();
-      const defaultSteps = [
-        {
-          id: 'step-1',
-          name: '1. Auth Login / Sync',
-          method: 'POST',
-          urlTemplate: '/api/v1/auth/sync',
-          bodyTemplate: JSON.stringify({ email: "admin@example.com", password: "secretpassword" })
-        },
-        {
-          id: 'step-2',
-          name: '2. Get User Profile',
-          method: 'GET',
-          urlTemplate: '/api/v1/auth/me'
-        },
-        {
-          id: 'step-3',
-          name: '3. Fetch Admin Dashboard',
-          method: 'GET',
-          urlTemplate: '/api/v1/admin/dashboard'
+        if (data.environments && data.environments.length > 0) {
+          envSelect.innerHTML = data.environments.map(e => \`<option value="\${e}">\${e}</option>\`).join('');
+          envSelect.value = data.activeEnvironment;
         }
-      ];
-
-      try {
-        const res = await fetch('/api/workflow/run', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            baseHost,
-            steps: defaultSteps,
-            initialContext: { authToken: authTokenInput.value.trim() }
-          })
-        });
-
-        const data = await res.json();
-        responseOutput.textContent = JSON.stringify(data, null, 2);
-        
-        metricsBadge.style.display = 'inline-block';
-        metricsBadge.className = 'status-tag status-2xx';
-        metricsBadge.textContent = 'E2E Workflow Complete';
-
-        setTimeout(loadExecutionLogs, 100);
-      } catch (err) {
-        responseOutput.textContent = 'Workflow Error: ' + err.message;
-      }
-    });
-
-    function extractTokenRecursive(obj) {
-      if (!obj || typeof obj !== 'object') return null;
-      const keys = ['token', 'accessToken', 'access_token', 'jwt', 'authToken', 'auth_token', 'bearerToken', 'bearer'];
-      for (const k of keys) {
-        if (obj[k] && typeof obj[k] === 'string' && obj[k].length > 10) return obj[k];
-      }
-      for (const k in obj) {
-        if (typeof obj[k] === 'object') {
-          const res = extractTokenRecursive(obj[k]);
-          if (res) return res;
-        }
-      }
-      return null;
+      } catch (e) { }
     }
 
-    async function probeActivePorts() {
+    envSelect.addEventListener('change', async () => {
+      const selected = envSelect.value;
       try {
-        const res = await fetch('/api/probe-ports');
+        const res = await fetch('/api/config?env=' + selected);
         const data = await res.json();
-        if (data.activePorts && data.activePorts.length > 0) {
-          activePortsNotice.style.color = 'var(--green)';
-          activePortsNotice.textContent = '[Active Backend Port Detected: ' + data.activePorts[0] + ']';
-          baseHostInput.value = 'http://localhost:' + data.activePorts[0];
+        if (data.variables && data.variables.BASE_URL) {
+          baseHostInput.value = data.variables.BASE_URL;
         }
       } catch (e) {}
+    });
+
+    // Transpiler Modal Trigger
+    const openTranspileBtn = document.getElementById('openTranspileBtn');
+    const transpileModalBtn = document.getElementById('transpileModalBtn');
+    const transpileModal = document.getElementById('transpileModal');
+    const transpileTargetSelect = document.getElementById('transpileTargetSelect');
+    const transpileCodeOutput = document.getElementById('transpileCodeOutput');
+
+    function showTranspileModal() {
+      transpileModal.style.display = 'flex';
+      updateTranspiledCode();
     }
 
+    openTranspileBtn.addEventListener('click', showTranspileModal);
+    transpileModalBtn.addEventListener('click', showTranspileModal);
+
+    async function updateTranspiledCode() {
+      const target = transpileTargetSelect.value;
+      let jsonBody = undefined;
+      try {
+        if (bodyInput.value.trim()) jsonBody = JSON.parse(bodyInput.value.trim());
+      } catch (e) {}
+
+      let headers = {};
+      try {
+        if (headersInput.value.trim()) headers = JSON.parse(headersInput.value.trim());
+      } catch (e) {}
+
+      const res = await fetch('/api/transpile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          method: methodSelect.value,
+          url: urlInput.value.trim(),
+          headers,
+          jsonBody,
+          target
+        })
+      });
+      const data = await res.json();
+      transpileCodeOutput.textContent = data.code || data.error;
+    }
+
+    transpileTargetSelect.addEventListener('change', updateTranspiledCode);
+
+    document.getElementById('copyTranspileBtn').addEventListener('click', () => {
+      navigator.clipboard.writeText(transpileCodeOutput.textContent);
+      alert('Transpiled code copied to clipboard!');
+    });
+
+    // JSON Diff Modal Trigger
+    const diffModalBtn = document.getElementById('diffModalBtn');
+    const diffModal = document.getElementById('diffModal');
+    const runDiffBtn = document.getElementById('runDiffBtn');
+    const diffOutput = document.getElementById('diffOutput');
+
+    diffModalBtn.addEventListener('click', () => {
+      diffModal.style.display = 'flex';
+    });
+
+    runDiffBtn.addEventListener('click', async () => {
+      const url1 = document.getElementById('diffUrl1').value.trim();
+      const url2 = document.getElementById('diffUrl2').value.trim();
+      if (!url1 || !url2) return alert('Please enter both URLs/JSONs to compare');
+
+      diffOutput.textContent = 'Comparing structures...';
+
+      let body = {};
+      try {
+        if (url1.startsWith('{') || url1.startsWith('[')) {
+          body = { json1: JSON.parse(url1), json2: JSON.parse(url2) };
+        } else {
+          body = { url1, url2 };
+        }
+      } catch (e) {
+        body = { url1, url2 };
+      }
+
+      const res = await fetch('/api/diff', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      const data = await res.json();
+
+      if (data.diff) {
+        let text = data.diff.isIdentical ? '[Success] Structures are 100% identical!\\n' : '[Diff Detected]\\n';
+        if (data.diff.addedKeys.length > 0) text += '\\n+ Added Keys:\\n  ' + data.diff.addedKeys.join('\\n  ');
+        if (data.diff.removedKeys.length > 0) text += '\\n- Removed Keys:\\n  ' + data.diff.removedKeys.join('\\n  ');
+        if (data.diff.modifiedKeys.length > 0) text += '\\n~ Modified Types:\\n  ' + JSON.stringify(data.diff.modifiedKeys, null, 2);
+        diffOutput.textContent = text;
+      } else {
+        diffOutput.textContent = data.error || 'Failed to compare';
+      }
+    });
+
+    // Benchmark Modal Trigger
+    const runBenchBtn = document.getElementById('runBenchBtn');
+    const benchModal = document.getElementById('benchModal');
+    const startBenchBtn = document.getElementById('startBenchBtn');
+    const benchOutput = document.getElementById('benchOutput');
+
+    runBenchBtn.addEventListener('click', () => {
+      benchModal.style.display = 'flex';
+    });
+
+    startBenchBtn.addEventListener('click', async () => {
+      const url = document.getElementById('benchUrlInput').value.trim();
+      const totalRequests = parseInt(document.getElementById('benchRequestsInput').value.trim(), 10) || 100;
+      const concurrency = parseInt(document.getElementById('benchConcurrencyInput').value.trim(), 10) || 10;
+
+      benchOutput.textContent = 'Running load benchmark...';
+
+      const res = await fetch('/api/benchmark/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url, totalRequests, concurrency })
+      });
+      const data = await res.json();
+      if (data.result) {
+        const r = data.result;
+        benchOutput.textContent = \`[Benchmark Complete]
+Requests Per Second : \${r.requestsPerSecond} req/s
+Total Duration      : \${r.totalDurationMs} ms
+Success / Failure   : \${r.successCount} / \${r.failureCount}
+Percentiles         : p50: \${r.p50Ms}ms | p95: \${r.p95Ms}ms | p99: \${r.p99Ms}ms
+Min / Avg / Max     : \${r.minMs}ms / \${r.avgMs}ms / \${r.maxMs}ms\`;
+      } else {
+        benchOutput.textContent = data.error || 'Benchmark failed';
+      }
+    });
+
+    // Load Discovered Routes
     async function loadDiscoveredRoutes() {
       try {
         const res = await fetch('/api/routes');
         const data = await res.json();
         allRoutes = data.routes || [];
-        renderRoutes(allRoutes);
-      } catch (e) {
-        routeList.innerHTML = '<div style="padding:14px; color:var(--red);">Failed to scan workspace routes</div>';
+        document.getElementById('routeCount').textContent = data.count || 0;
+        renderRoutes();
+      } catch (err) {
+        routeList.innerHTML = '<div style="padding:10px; color:var(--red);">Failed to load routes</div>';
       }
     }
 
+    function renderRoutes() {
+      const query = routeSearchInput.value.toLowerCase();
+      const sec = secFilterSelect.value;
+
+      const filtered = allRoutes.filter(r => {
+        const matchesQuery = r.path.toLowerCase().includes(query) || r.tag.toLowerCase().includes(query) || r.method.toLowerCase().includes(query);
+        const matchesSec = sec === 'all' || (sec === 'auth' ? r.requiresAuth : !r.requiresAuth);
+        return matchesQuery && matchesSec;
+      });
+
+      if (filtered.length === 0) {
+        routeList.innerHTML = '<div style="padding:16px; color:var(--text-muted);">No matching AST routes</div>';
+        return;
+      }
+
+      routeList.innerHTML = filtered.map(r => \`
+        <div class="route-item" onclick="selectRoute('\${r.method}', '\${r.path}')">
+          <div class="route-top">
+            <span class="method-badge method-\${r.method}">\${r.method}</span>
+            <span class="sec-badge \${r.requiresAuth ? 'sec-auth' : 'sec-public'}">\${r.requiresAuth ? 'Auth' : 'Public'}</span>
+          </div>
+          <div class="route-path">\${r.path}</div>
+          <div class="route-meta">
+            <span>\${r.tag}</span>
+            <span>\${r.framework}</span>
+          </div>
+        </div>
+      \`).join('');
+    }
+
+    function selectRoute(method, path) {
+      methodSelect.value = method;
+      const host = baseHostInput.value.replace(/\\/$/, '');
+      urlInput.value = path.startsWith('http') ? path : host + (path.startsWith('/') ? '' : '/') + path;
+    }
+
+    routeSearchInput.addEventListener('input', renderRoutes);
+    secFilterSelect.addEventListener('change', renderRoutes);
+    document.getElementById('resniffBtn').addEventListener('click', loadDiscoveredRoutes);
+
+    // Execution Logs
     async function loadExecutionLogs() {
       try {
         const res = await fetch('/api/logs');
         const data = await res.json();
-        allLogs = data.logs || [];
-        renderLogs(allLogs);
+        renderLogs(data.logs || []);
       } catch (e) {}
-    }
-
-    function renderRoutes(routes) {
-      const searchTerm = routeSearchInput.value.toLowerCase().trim();
-      const secFilter = secFilterSelect.value;
-
-      const filtered = routes.filter(r => {
-        const matchesSearch = r.path.toLowerCase().includes(searchTerm) || 
-                              r.method.toLowerCase().includes(searchTerm) ||
-                              r.tag.toLowerCase().includes(searchTerm) ||
-                              r.framework.toLowerCase().includes(searchTerm);
-        
-        const matchesSec = secFilter === 'all' || 
-                           (secFilter === 'auth' && r.requiresAuth) ||
-                           (secFilter === 'public' && !r.requiresAuth);
-
-        return matchesSearch && matchesSec;
-      });
-
-      routeCount.textContent = filtered.length;
-
-      if (filtered.length === 0) {
-        routeList.innerHTML = '<div style="padding:14px; color:var(--text-muted); font-size:0.8rem;">No routes matching filter.</div>';
-        return;
-      }
-
-      const grouped = {};
-      filtered.forEach(r => {
-        const groupTitle = \`Step \${r.executionOrder}: \${r.tag}\`;
-        if (!grouped[groupTitle]) grouped[groupTitle] = [];
-        grouped[groupTitle].push(r);
-      });
-
-      routeList.innerHTML = '';
-
-      Object.keys(grouped).forEach(groupTitle => {
-        const groupEl = document.createElement('div');
-        groupEl.className = 'group-header';
-        groupEl.textContent = groupTitle;
-        routeList.appendChild(groupEl);
-
-        grouped[groupTitle].forEach(r => {
-          const item = document.createElement('div');
-          item.className = 'route-item';
-          item.innerHTML = \`
-            <div class="route-top">
-              <span class="method-badge method-\${r.method}">\${r.method}</span>
-              <span class="sec-badge \${r.requiresAuth ? 'sec-auth' : 'sec-public'}">
-                \${r.requiresAuth ? 'Bearer Auth' : 'Public'}
-              </span>
-            </div>
-            <div class="route-path">\${r.path}</div>
-            <div class="route-meta">
-              <span>\${r.file}:\${r.line}</span>
-              <span style="color: var(--purple); font-weight: 600;">\${r.framework}</span>
-            </div>
-          \`;
-          item.addEventListener('click', () => {
-            methodSelect.value = r.method;
-            let baseHost = baseHostInput.value.trim().replace(/\\/$/, '');
-            let cleanPath = r.path.startsWith('/') ? r.path : '/' + r.path;
-
-            cleanPath = cleanPath.replace(/:([a-zA-Z0-9_]+)/g, '1');
-            urlInput.value = r.path.startsWith('http') ? r.path : baseHost + cleanPath;
-
-            if (r.path.includes('login') || r.path.includes('auth') || r.path.includes('sync')) {
-              bodyInput.value = JSON.stringify({ email: "user@example.com", password: "password123" }, null, 2);
-            } else if (r.suggestedBody && Object.keys(r.suggestedBody).length > 0) {
-              bodyInput.value = JSON.stringify(r.suggestedBody, null, 2);
-            } else {
-              bodyInput.value = '';
-            }
-            sendBtn.click();
-          });
-          routeList.appendChild(item);
-        });
-      });
     }
 
     function renderLogs(logs) {
       if (logs.length === 0) {
-        logList.innerHTML = '<div style="padding:14px; color:var(--text-muted); font-size:0.8rem;">No execution logs recorded.</div>';
+        logList.innerHTML = '<div style="padding:10px; color:var(--text-muted); font-size:0.8rem;">No execution logs yet</div>';
         return;
       }
 
-      logList.innerHTML = '';
-      logs.forEach((log) => {
-        const item = document.createElement('div');
-        item.className = 'log-item';
-        const statusColorClass = log.status < 300 ? 'status-2xx' : 'status-4xx';
-
-        item.innerHTML = \`
+      logList.innerHTML = logs.map(l => \`
+        <div class="log-item" onclick="selectLog('\${encodeURIComponent(JSON.stringify(l))}')">
           <div class="log-top">
-            <span class="method-badge method-\${log.method}">\${log.method}</span>
-            <span class="status-tag \${statusColorClass}">HTTP \${log.status}</span>
+            <span class="method-badge method-\${l.method}">\${l.method}</span>
+            <span class="status-tag \${l.status >= 200 && l.status < 300 ? 'status-2xx' : 'status-4xx'}">\${l.status} \${l.statusText}</span>
           </div>
-          <div class="log-url">\${log.url}</div>
+          <div class="log-url">\${l.url}</div>
           <div class="log-meta">
-            <span>Duration: \${log.durationMs}ms</span>
-            <span>\${log.timestamp}</span>
+            <span>\${l.durationMs}ms</span>
+            <span>\${l.timestamp}</span>
           </div>
-        \`;
-
-        item.addEventListener('click', () => {
-          methodSelect.value = log.method;
-          urlInput.value = log.url;
-          if (log.requestBody) bodyInput.value = log.requestBody;
-
-          metricsBadge.style.display = 'inline-block';
-          metricsBadge.className = 'status-tag ' + statusColorClass;
-          metricsBadge.textContent = \`HTTP \${log.status} \${log.statusText} (\${log.durationMs}ms)\`;
-
-          try {
-            const parsed = JSON.parse(log.responseBody || '');
-            responseOutput.textContent = JSON.stringify(parsed, null, 2);
-          } catch {
-            responseOutput.textContent = log.responseBody || '// Empty response';
-          }
-        });
-
-        logList.appendChild(item);
-      });
+        </div>
+      \`).join('');
     }
 
-    routeSearchInput.addEventListener('input', () => renderRoutes(allRoutes));
-    secFilterSelect.addEventListener('change', () => renderRoutes(allRoutes));
-    resniffBtn.addEventListener('click', loadDiscoveredRoutes);
+    function selectLog(encoded) {
+      const l = JSON.parse(decodeURIComponent(encoded));
+      methodSelect.value = l.method;
+      urlInput.value = l.url;
+      if (l.requestBody) bodyInput.value = l.requestBody;
+      responseOutput.textContent = l.responseBody;
+      metricsBadge.style.display = 'inline-block';
+      metricsBadge.className = 'status-tag ' + (l.status >= 200 && l.status < 300 ? 'status-2xx' : 'status-4xx');
+      metricsBadge.textContent = \`HTTP \${l.status} \${l.statusText} (\${l.durationMs}ms)\`;
+    }
 
-    clearLogsBtn.addEventListener('click', async () => {
+    document.getElementById('clearLogsBtn').addEventListener('click', async () => {
       await fetch('/api/logs', { method: 'DELETE' });
       loadExecutionLogs();
     });
 
+    // Execute Request
     sendBtn.addEventListener('click', async () => {
       let url = urlInput.value.trim();
       const method = methodSelect.value;
@@ -1198,13 +1208,42 @@ function getWebUiHtml(): string {
         try {
           const parsed = JSON.parse(text);
           responseOutput.textContent = JSON.stringify(parsed, null, 2);
-
-          const extractedToken = extractTokenRecursive(parsed);
-          if (extractedToken) {
-            authTokenInput.value = extractedToken;
-          }
         } catch {
           responseOutput.textContent = text;
+        }
+
+        // Evaluate CI assertions if set
+        const expectStatus = parseInt(document.getElementById('expectStatusInput').value.trim(), 10);
+        const expectMaxTimeMs = parseInt(document.getElementById('expectMaxTimeInput').value.trim(), 10);
+        const expectJsonRaw = document.getElementById('expectJsonInput').value.trim();
+
+        const assertions = [];
+        if (expectJsonRaw && expectJsonRaw.includes('=')) {
+          const parts = expectJsonRaw.split('=');
+          assertions.push({ jsonPath: parts[0], expectedValue: parts[1] });
+        }
+
+        if (!isNaN(expectStatus) || !isNaN(expectMaxTimeMs) || assertions.length > 0) {
+          const assertRes = await fetch('/api/assertions/evaluate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              responseBody: text,
+              status: res.status,
+              responseTimeMs: elapsed,
+              expectStatus: isNaN(expectStatus) ? undefined : expectStatus,
+              expectMaxTimeMs: isNaN(expectMaxTimeMs) ? undefined : expectMaxTimeMs,
+              assertions
+            })
+          });
+          const assertData = await assertRes.json();
+          const box = document.getElementById('assertionResultsBox');
+          box.style.display = 'block';
+          box.innerHTML = (assertData.results || []).map(a => \`
+            <div style="color: \${a.passed ? 'var(--green)' : 'var(--red)'}; font-weight: 600;">
+              \${a.passed ? '✔' : '✖'} \${a.message}
+            </div>
+          \`).join('');
         }
 
         setTimeout(loadExecutionLogs, 100);
@@ -1218,7 +1257,7 @@ function getWebUiHtml(): string {
       }
     });
 
-    probeActivePorts();
+    loadConfigEnvs();
     loadDiscoveredRoutes();
     loadExecutionLogs();
   </script>
