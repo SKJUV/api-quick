@@ -1,6 +1,6 @@
-import readline from "readline";
+import readline from "node:readline";
 import { CoreHttpEngine } from "../core/http.js";
-import { HttpMethod } from "../types/index.js";
+import type { HttpMethod } from "../types/index.js";
 import { colorizeJson } from "./formatter.js";
 
 const RESET = "\x1b[0m";
@@ -9,7 +9,7 @@ const CYAN = "\x1b[36m";
 const GREEN = "\x1b[32m";
 const YELLOW = "\x1b[33m";
 const RED = "\x1b[31m";
-const MAGENTA = "\x1b[35m";
+const _MAGENTA = "\x1b[35m";
 const BG_BLUE = "\x1b[44m\x1b[37m";
 const GRAY = "\x1b[90m";
 
@@ -23,12 +23,12 @@ export async function launchTuiMode(): Promise<void> {
 
   const rl = readline.createInterface({
     input: process.stdin,
-    output: process.stdout
+    output: process.stdout,
   });
 
   renderScreen();
 
-  process.stdin.on("keypress", async (str, key) => {
+  process.stdin.on("keypress", async (_str, key) => {
     if (!key) return;
 
     if (key.ctrl && key.name === "c") {
@@ -55,7 +55,7 @@ export async function launchTuiMode(): Promise<void> {
         if (answer.trim()) {
           targetUrl = answer.trim();
           if (!targetUrl.startsWith("http://") && !targetUrl.startsWith("https://")) {
-            targetUrl = "https://" + targetUrl;
+            targetUrl = `https://${targetUrl}`;
           }
           statusMessage = `URL set to ${targetUrl}`;
         }
@@ -67,7 +67,7 @@ export async function launchTuiMode(): Promise<void> {
     if (key.name === "r") {
       statusMessage = `Sending ${selectedMethod} request to ${targetUrl}...`;
       renderScreen();
-      
+
       const engine = new CoreHttpEngine();
       try {
         const res = await engine.execute({
@@ -76,7 +76,7 @@ export async function launchTuiMode(): Promise<void> {
           headers: { "User-Agent": "api-quick-tui/0.1" },
           timeoutMs: 10000,
           followRedirects: true,
-          tlsVerify: true
+          tlsVerify: true,
         });
         lastResponse = res;
         statusMessage = `Request finished in ${res.metrics.totalTimeMs}ms with Status ${res.status}`;
@@ -97,7 +97,7 @@ export async function launchTuiMode(): Promise<void> {
   function renderScreen() {
     console.clear();
     console.log(`${BG_BLUE}${BOLD} ⚡ API-QUICK INTERACTIVE TERMINAL WORKBENCH (TUI v0.1) ${RESET}\n`);
-    
+
     console.log(`${BOLD}Target Endpoint:${RESET} ${CYAN}${selectedMethod}${RESET} ${targetUrl}`);
     console.log(`${GRAY}────────────────────────────────────────────────────────────────────────────${RESET}`);
 
@@ -106,8 +106,10 @@ export async function launchTuiMode(): Promise<void> {
         console.log(`${BOLD}${RED}ERROR:${RESET} ${lastResponse.error}`);
       } else {
         const statusColor = lastResponse.status < 300 ? GREEN : RED;
-        console.log(`${BOLD}STATUS:${RESET} ${statusColor}${lastResponse.status} ${lastResponse.statusText}${RESET}  ${GRAY}| Time: ${lastResponse.metrics.totalTimeMs}ms | Size: ${lastResponse.metrics.bytesReceived}B${RESET}\n`);
-        
+        console.log(
+          `${BOLD}STATUS:${RESET} ${statusColor}${lastResponse.status} ${lastResponse.statusText}${RESET}  ${GRAY}| Time: ${lastResponse.metrics.totalTimeMs}ms | Size: ${lastResponse.metrics.bytesReceived}B${RESET}\n`,
+        );
+
         console.log(`${BOLD}RESPONSE HEADERS:${RESET}`);
         for (const [k, v] of Object.entries(lastResponse.headers as Record<string, string>)) {
           console.log(`  ${CYAN}${k}${RESET}: ${v}`);
@@ -126,6 +128,8 @@ export async function launchTuiMode(): Promise<void> {
 
     console.log(`\n${GRAY}────────────────────────────────────────────────────────────────────────────${RESET}`);
     console.log(`${BOLD}${YELLOW}INFO:${RESET} ${statusMessage}`);
-    console.log(`${BOLD}SHORTCUTS:${RESET} [${BOLD}R${RESET}] Run Request | [${BOLD}M${RESET}] Switch Method | [${BOLD}U${RESET}] Edit URL | [${BOLD}Q${RESET}] Quit`);
+    console.log(
+      `${BOLD}SHORTCUTS:${RESET} [${BOLD}R${RESET}] Run Request | [${BOLD}M${RESET}] Switch Method | [${BOLD}U${RESET}] Edit URL | [${BOLD}Q${RESET}] Quit`,
+    );
   }
 }

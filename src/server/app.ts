@@ -1,8 +1,8 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { sniffProjectRoutes } from "../core/ast-sniffer.js";
-import { WorkflowEngine, WorkflowStep } from "../core/workflow.js";
-import { BenchmarkEngine, BenchmarkOptions } from "../core/benchmark.js";
+import { BenchmarkEngine, type BenchmarkOptions } from "../core/benchmark.js";
+import { WorkflowEngine, type WorkflowStep } from "../core/workflow.js";
 
 export interface ExecutionLog {
   id: string;
@@ -30,7 +30,7 @@ export function createWebServer(currentPort: number = 4000) {
   app.get("/api/routes", (c) => {
     const rawRoutes = sniffProjectRoutes();
     const seen = new Set<string>();
-    const deduplicatedRoutes = rawRoutes.filter(r => {
+    const deduplicatedRoutes = rawRoutes.filter((r) => {
       const key = `${r.method}:${r.path}`;
       if (seen.has(key)) return false;
       seen.add(key);
@@ -47,9 +47,11 @@ export function createWebServer(currentPort: number = 4000) {
       const baseHost: string = body.baseHost || `http://localhost:${currentPort}`;
 
       const engine = new WorkflowEngine();
-      const fullSteps = steps.map(s => ({
+      const fullSteps = steps.map((s) => ({
         ...s,
-        urlTemplate: s.urlTemplate.startsWith("http") ? s.urlTemplate : `${baseHost.replace(/\/$/, "")}${s.urlTemplate.startsWith("/") ? "" : "/"}${s.urlTemplate}`
+        urlTemplate: s.urlTemplate.startsWith("http")
+          ? s.urlTemplate
+          : `${baseHost.replace(/\/$/, "")}${s.urlTemplate.startsWith("/") ? "" : "/"}${s.urlTemplate}`,
       }));
 
       const results = await engine.runWorkflow(fullSteps, body.initialContext || {});
@@ -69,7 +71,7 @@ export function createWebServer(currentPort: number = 4000) {
         headers: body.headers || {},
         body: body.body,
         totalRequests: body.totalRequests || 100,
-        concurrency: body.concurrency || 10
+        concurrency: body.concurrency || 10,
       };
 
       const engine = new BenchmarkEngine();
@@ -96,8 +98,8 @@ export function createWebServer(currentPort: number = 4000) {
         responses: {
           "200": { description: "Successful response" },
           "401": { description: "Unauthorized / Missing Bearer Token" },
-          "500": { description: "Internal Server Error" }
-        }
+          "500": { description: "Internal Server Error" },
+        },
       };
     }
 
@@ -106,18 +108,18 @@ export function createWebServer(currentPort: number = 4000) {
       info: {
         title: "Discovered Project API Documentation",
         version: "1.0.0",
-        description: "Auto-generated OpenAPI 3.0 specification from AST source code analysis by api-quick."
+        description: "Auto-generated OpenAPI 3.0 specification from AST source code analysis by api-quick.",
       },
       components: {
         securitySchemes: {
           BearerAuth: {
             type: "http",
             scheme: "bearer",
-            bearerFormat: "JWT"
-          }
-        }
+            bearerFormat: "JWT",
+          },
+        },
       },
-      paths
+      paths,
     };
 
     return c.json(openApiSpec);
@@ -179,7 +181,7 @@ export function createWebServer(currentPort: number = 4000) {
       const proxyResponse = await fetch(targetUrl, {
         method,
         headers: incomingHeaders,
-        body
+        body,
       });
 
       totalTime = Math.round((performance.now() - startTime) * 100) / 100;
@@ -197,7 +199,7 @@ export function createWebServer(currentPort: number = 4000) {
         durationMs: totalTime,
         responseSize: Buffer.byteLength(responseText, "utf-8"),
         requestBody: requestBodyText,
-        responseBody: responseText
+        responseBody: responseText,
       });
 
       if (executionLogs.length > 100) executionLogs.pop();
@@ -209,9 +211,9 @@ export function createWebServer(currentPort: number = 4000) {
 
       return new Response(responseText, {
         status: proxyResponse.status,
-        headers: responseHeaders
+        headers: responseHeaders,
       });
-    } catch (err: any) {
+    } catch (_err: any) {
       totalTime = Math.round((performance.now() - startTime) * 100) / 100;
       executionLogs.unshift({
         id: `log-${Date.now()}`,
@@ -222,10 +224,15 @@ export function createWebServer(currentPort: number = 4000) {
         statusText: "Bad Gateway",
         durationMs: totalTime,
         responseSize: 0,
-        responseBody: `Connection Refused to ${targetUrl}. Is your backend server running on this port?`
+        responseBody: `Connection Refused to ${targetUrl}. Is your backend server running on this port?`,
       });
 
-      return c.json({ error: `Proxy Request Failed: Connection Refused to ${targetUrl}. Is your backend server running on this port?` }, 502);
+      return c.json(
+        {
+          error: `Proxy Request Failed: Connection Refused to ${targetUrl}. Is your backend server running on this port?`,
+        },
+        502,
+      );
     }
   });
 

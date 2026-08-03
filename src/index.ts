@@ -1,16 +1,17 @@
 import net from "node:net";
-import { parseCliArgs } from "./cli/parser.js";
-import { CoreHttpEngine } from "./core/http.js";
-import { formatError, formatResponse } from "./cli/formatter.js";
-import { evaluateAssertions, POSIX_EXIT_CODES } from "./cli/assertions.js";
-import { transpileToCode } from "./core/transpiler.js";
-import { launchTuiMode } from "./cli/tui.js";
-import { createWebServer } from "./server/app.js";
 import { serve } from "@hono/node-server";
+import { evaluateAssertions, POSIX_EXIT_CODES } from "./cli/assertions.js";
+import { generateShellCompletion } from "./cli/completion.js";
+import { formatError, formatResponse } from "./cli/formatter.js";
+import { parseCliArgs } from "./cli/parser.js";
+import { launchTuiMode } from "./cli/tui.js";
 import { sniffProjectRoutes } from "./core/ast-sniffer.js";
-import { createMockServer } from "./core/mock.js";
-import { compareJsonStructures } from "./core/diff.js";
 import { BenchmarkEngine } from "./core/benchmark.js";
+import { compareJsonStructures } from "./core/diff.js";
+import { CoreHttpEngine } from "./core/http.js";
+import { createMockServer } from "./core/mock.js";
+import { transpileToCode } from "./core/transpiler.js";
+import { createWebServer } from "./server/app.js";
 
 async function findAvailablePort(startPort: number): Promise<number> {
   return new Promise((resolve) => {
@@ -43,6 +44,7 @@ async function main() {
   \x1b[33mdiff\x1b[0m <url1> <url2>      Visual structural JSON diffing engine
   \x1b[33msniff\x1b[0m [dir]             Scan local source code AST for API routes
   \x1b[33mbench\x1b[0m <url> -n 100 -c 10  Run high-throughput HTTP load benchmark
+  \x1b[33mcompletion\x1b[0m [zsh|bash|fish] Generate shell auto-completion script
 
 \x1b[1mOPTIONS:\x1b[0m
   \x1b[32m-X, --method <METHOD>\x1b[0m   Specify HTTP method explicitly (GET, POST, PUT, DELETE, etc.)
@@ -50,22 +52,22 @@ async function main() {
   \x1b[32m-b, --bearer <TOKEN>\x1b[0m    Inject Bearer Authorization token
   \x1b[32m-u, --auth <U:P>\x1b[0m        Inject Basic Authorization credentials
   \x1b[32m-m, --timeout <ms>\x1b[0m      Request timeout in milliseconds (default: 10000)
+  \x1b[32m--env <name>\x1b[0m            Select environment profile from .api-quickrc.json
   \x1b[32m-k, --insecure\x1b[0m          Disable TLS/SSL certificate verification
-  \x1b[32m-o, --output <file>\x1b[0m     Save response body directly to output file
 
 \x1b[1mCODE GENERATION & CI ASSERTIONS:\x1b[0m
-  \x1b[35m--to <lang>\x1b[0m             Transpile CLI request to target code (\x1b[33mcurl\x1b[0m, \x1b[33mfetch-ts\x1b[0m, \x1b[33mpython\x1b[0m, \x1b[33mgo\x1b[0m, \x1b[33mrust\x1b[0m)
+  \x1b[35m--to <lang>\x1b[0m             Transpile CLI request to target code (\x1b[33mcurl\x1b[0m, \x1b[33mfetch-ts\x1b[0m, \x1b[33mpython\x1b[0m, \x1b[33mgo\x1b[0m, \x1b[33mrust\x1b[0m, \x1b[33mjava\x1b[0m, \x1b[33mcsharp\x1b[0m, \x1b[33mphp\x1b[0m)
   \x1b[35m--expect-status <code>\x1b[0m  Assert HTTP status code (e.g. 200)
   \x1b[35m--expect-max-time <ms>\x1b[0m  Assert max response time (e.g. 150ms, 1s)
   \x1b[35m--expect-header <k=v>\x1b[0m  Assert response header value
-  \x1b[35m--expect-json <path=v>\x1b[0m Assert JSONPath value (e.g. $.status = OK)
+  \x1b[35m--expect-json <path=v>\x1b[0m Assert JSONPath value (e.g. $.status = OK, $.users[0].id = 1, $.items len=5)
 
 \x1b[1mEXAMPLES:\x1b[0m
   api-quick GET https://api.github.com/repos/SKJUV/api-quick
-  api-quick POST https://api.stripe.com/v1/charges amount=2000 currency=usd
-  api-quick POST https://api.example.com/users name:="Alice" role:="ADMIN"
-  api-quick GET https://api.example.com/users --to python
+  api-quick POST https://api.example.com/users name:="Alice" role:="ADMIN" --env staging
+  api-quick GET {{BASE_URL}}/users --to python
   api-quick GET https://api.example.com/health --expect-status 200 --expect-max-time 200ms
+  api-quick completion zsh > ~/.zshrc
 `);
     process.exit(POSIX_EXIT_CODES.EXIT_SUCCESS);
   }
@@ -75,6 +77,12 @@ async function main() {
   // Subcommand Routing
   if (firstCommand === "tui") {
     await launchTuiMode();
+    return;
+  }
+
+  if (firstCommand === "completion") {
+    const shell = (rawArgs[1] || "zsh").toLowerCase() as "zsh" | "bash" | "fish";
+    console.log(generateShellCompletion(shell));
     return;
   }
 
@@ -88,7 +96,9 @@ async function main() {
     const availablePort = await findAvailablePort(requestedPort);
 
     if (availablePort !== requestedPort) {
-      console.log(`\x1b[33m[Warning] Port ${requestedPort} is in use. Automatically switching to port ${availablePort}...\x1b[0m`);
+      console.log(
+        `\x1b[33m[Warning] Port ${requestedPort} is in use. Automatically switching to port ${availablePort}...\x1b[0m`,
+      );
     }
 
     const app = createWebServer(availablePort);
@@ -98,7 +108,7 @@ async function main() {
 
     serve({
       fetch: app.fetch,
-      port: availablePort
+      port: availablePort,
     });
     return;
   }
@@ -110,7 +120,9 @@ async function main() {
       mockPort = parseInt(rawArgs[portIdx + 1], 10);
     }
 
-    console.log(`\n\x1b[1m\x1b[33m[Mock Server] Launching api-quick Zero-Latency AST Mock Server on http://localhost:${mockPort}...\x1b[0m`);
+    console.log(
+      `\n\x1b[1m\x1b[33m[Mock Server] Launching api-quick Zero-Latency AST Mock Server on http://localhost:${mockPort}...\x1b[0m`,
+    );
     createMockServer(mockPort);
     return;
   }
@@ -128,7 +140,9 @@ async function main() {
     console.log(`\x1b[1mDiscovered ${routes.length} AST Routes:\x1b[0m\n`);
     routes.forEach((r) => {
       const secTag = r.requiresAuth ? `\x1b[31m[Auth]\x1b[0m` : `\x1b[32m[Public]\x1b[0m`;
-      console.log(`\x1b[36m${r.method.padEnd(6)}\x1b[0m \x1b[1m${r.path.padEnd(40)}\x1b[0m ${secTag} \x1b[90m(${r.framework} - ${r.file}:${r.line})\x1b[0m`);
+      console.log(
+        `\x1b[36m${r.method.padEnd(6)}\x1b[0m \x1b[1m${r.path.padEnd(40)}\x1b[0m ${secTag} \x1b[90m(${r.framework} - ${r.file}:${r.line})\x1b[0m`,
+      );
     });
     console.log("");
     return;
@@ -137,7 +151,9 @@ async function main() {
   if (firstCommand === "bench") {
     const url = rawArgs[1];
     if (!url) {
-      console.error(`\x1b[31mError: Please specify target URL for benchmark. Usage: api-quick bench <url> -n 100 -c 10\x1b[0m`);
+      console.error(
+        `\x1b[31mError: Please specify target URL for benchmark. Usage: api-quick bench <url> -n 100 -c 10\x1b[0m`,
+      );
       process.exit(1);
     }
 
@@ -150,19 +166,23 @@ async function main() {
     const cIdx = rawArgs.indexOf("-c");
     if (cIdx !== -1 && rawArgs[cIdx + 1]) concurrency = parseInt(rawArgs[cIdx + 1], 10);
 
-    console.log(`\n\x1b[1m\x1b[31m[Benchmark] Running High-Throughput Load Benchmark on ${url} (${totalRequests} requests, ${concurrency} workers)...\x1b[0m\n`);
-    
+    console.log(
+      `\n\x1b[1m\x1b[31m[Benchmark] Running High-Throughput Load Benchmark on ${url} (${totalRequests} requests, ${concurrency} workers)...\x1b[0m\n`,
+    );
+
     const benchEngine = new BenchmarkEngine();
     const result = await benchEngine.runBenchmark({
       url,
       totalRequests,
-      concurrency
+      concurrency,
     });
 
     console.log(`\x1b[1m\x1b[32m[Benchmark Complete]\x1b[0m`);
     console.log(`  Requests Per Second : \x1b[1m\x1b[33m${result.requestsPerSecond} req/s\x1b[0m`);
     console.log(`  Total Duration      : ${result.totalDurationMs} ms`);
-    console.log(`  Successful / Failed : \x1b[32m${result.successCount}\x1b[0m / \x1b[31m${result.failureCount}\x1b[0m`);
+    console.log(
+      `  Successful / Failed : \x1b[32m${result.successCount}\x1b[0m / \x1b[31m${result.failureCount}\x1b[0m`,
+    );
     console.log(`  Latency Percentiles : p50: ${result.p50Ms}ms | p95: ${result.p95Ms}ms | p99: ${result.p99Ms}ms`);
     console.log(`  Min / Avg / Max     : ${result.minMs}ms / ${result.avgMs}ms / ${result.maxMs}ms\n`);
     return;
@@ -178,12 +198,26 @@ async function main() {
     }
 
     console.log(`\n\x1b[1m\x1b[35m[JSON Diff] Comparing ${url1} vs ${url2}...\x1b[0m\n`);
-    
+
     const httpEngine = new CoreHttpEngine();
     try {
       const [res1, res2] = await Promise.all([
-        httpEngine.execute({ url: url1, method: "GET", headers: {}, timeoutMs: 10000, followRedirects: true, tlsVerify: true }),
-        httpEngine.execute({ url: url2, method: "GET", headers: {}, timeoutMs: 10000, followRedirects: true, tlsVerify: true })
+        httpEngine.execute({
+          url: url1,
+          method: "GET",
+          headers: {},
+          timeoutMs: 10000,
+          followRedirects: true,
+          tlsVerify: true,
+        }),
+        httpEngine.execute({
+          url: url2,
+          method: "GET",
+          headers: {},
+          timeoutMs: 10000,
+          followRedirects: true,
+          tlsVerify: true,
+        }),
       ]);
 
       const json1 = JSON.parse(res1.body);
@@ -231,7 +265,7 @@ async function main() {
       body: cliArgs.jsonBody ? JSON.stringify(cliArgs.jsonBody) : cliArgs.rawBody,
       timeoutMs: 10000,
       followRedirects: true,
-      tlsVerify: true
+      tlsVerify: true,
     });
 
     // Format & Output Response
@@ -240,7 +274,6 @@ async function main() {
     // Evaluate Assertions if present
     const exitCode = evaluateAssertions(cliArgs, response);
     process.exit(exitCode);
-
   } catch (err: any) {
     console.error(formatError(err.message));
     if (err.message.includes("timed out") || err.message.includes("fetch failed")) {

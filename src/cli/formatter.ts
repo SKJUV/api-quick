@@ -1,4 +1,4 @@
-import { NetworkResponseSpec } from "../types/index.js";
+import type { NetworkResponseSpec } from "../types/index.js";
 
 // ANSI Color Constants
 const RESET = "\x1b[0m";
@@ -13,7 +13,7 @@ const GRAY = "\x1b[90m";
 
 export function formatResponse(res: NetworkResponseSpec): string {
   const statusColor = res.status >= 200 && res.status < 300 ? GREEN : res.status >= 400 ? RED : YELLOW;
-  
+
   let output = `${BOLD}${statusColor}HTTP/1.1 ${res.status} ${res.statusText}${RESET} ${GRAY}(${res.metrics.totalTimeMs}ms, ${res.metrics.bytesReceived} bytes)${RESET}\n`;
 
   // Headers

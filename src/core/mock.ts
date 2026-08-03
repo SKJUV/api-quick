@@ -1,5 +1,5 @@
-import { Hono } from "hono";
 import { serve } from "@hono/node-server";
+import { Hono } from "hono";
 import { sniffProjectRoutes } from "./ast-sniffer.js";
 
 export function createMockServer(port = 8080) {
@@ -21,7 +21,7 @@ export function createMockServer(port = 8080) {
         _framework: r.framework,
         _route: r.path,
         timestamp: new Date().toISOString(),
-        data: mockData
+        data: mockData,
       });
     };
 
@@ -31,7 +31,9 @@ export function createMockServer(port = 8080) {
   }
 
   // Catch-all fallback mock route
-  app.all("*", (c) => c.json({ _mock: true, message: `Mock API Server - Endpoint ${c.req.path} registered.`, path: c.req.path }));
+  app.all("*", (c) =>
+    c.json({ _mock: true, message: `Mock API Server - Endpoint ${c.req.path} registered.`, path: c.req.path }),
+  );
 
   return serve({ fetch: app.fetch, port });
 }
@@ -44,21 +46,19 @@ function generateMockResponseBody(routePath: string, suggestedBody?: Record<stri
   if (routePath.includes("users") || routePath.includes("staff")) {
     return [
       { id: 1, name: "Alice Johnson", email: "alice@example.com", role: "ADMIN" },
-      { id: 2, name: "Bob Smith", email: "bob@example.com", role: "USER" }
+      { id: 2, name: "Bob Smith", email: "bob@example.com", role: "USER" },
     ];
   }
 
   if (routePath.includes("products") || routePath.includes("categories")) {
     return [
       { id: 1, title: "Premium Laptop", price: 1299.99, category: "Electronics" },
-      { id: 2, title: "Wireless Headphones", price: 199.99, category: "Audio" }
+      { id: 2, title: "Wireless Headphones", price: 199.99, category: "Audio" },
     ];
   }
 
   if (routePath.includes("orders") || routePath.includes("proposals")) {
-    return [
-      { id: 101, status: "DELIVERED", totalAmount: 249.50, itemsCount: 3 }
-    ];
+    return [{ id: 101, status: "DELIVERED", totalAmount: 249.5, itemsCount: 3 }];
   }
 
   return { status: "success", message: `Mock data for endpoint ${routePath}` };

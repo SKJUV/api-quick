@@ -1,5 +1,5 @@
+import type { HttpMethod, NetworkRequestSpec } from "../types/index.js";
 import { CoreHttpEngine } from "./http.js";
-import { HttpMethod, NetworkRequestSpec } from "../types/index.js";
 
 export interface BenchmarkOptions {
   url: string;
@@ -53,7 +53,7 @@ export class BenchmarkEngine {
           body,
           timeoutMs: 10000,
           followRedirects: true,
-          tlsVerify: true
+          tlsVerify: true,
         };
 
         try {
@@ -99,7 +99,7 @@ export class BenchmarkEngine {
       maxMs,
       avgMs,
       successCount,
-      failureCount
+      failureCount,
     };
   }
 }

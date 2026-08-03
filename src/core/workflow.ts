@@ -1,5 +1,5 @@
+import type { HttpMethod, NetworkRequestSpec, NetworkResponseSpec } from "../types/index.js";
 import { CoreHttpEngine } from "./http.js";
-import { HttpMethod, NetworkRequestSpec, NetworkResponseSpec } from "../types/index.js";
 
 export interface WorkflowStep {
   id: string;
@@ -29,7 +29,10 @@ export class WorkflowEngine {
     this.httpEngine = new CoreHttpEngine();
   }
 
-  async runWorkflow(steps: WorkflowStep[], initialContext: Record<string, any> = {}): Promise<WorkflowExecutionResult[]> {
+  async runWorkflow(
+    steps: WorkflowStep[],
+    initialContext: Record<string, any> = {},
+  ): Promise<WorkflowExecutionResult[]> {
     const context: Record<string, any> = { ...initialContext };
     const results: WorkflowExecutionResult[] = [];
 
@@ -37,7 +40,7 @@ export class WorkflowEngine {
       // Interpolate context variables in URL, Headers, Body
       const interpolatedUrl = this.interpolate(step.urlTemplate, context);
       const interpolatedBody = step.bodyTemplate ? this.interpolate(step.bodyTemplate, context) : undefined;
-      
+
       const interpolatedHeaders: Record<string, string> = {};
       if (step.headers) {
         for (const [k, v] of Object.entries(step.headers)) {
@@ -45,8 +48,10 @@ export class WorkflowEngine {
         }
       }
 
-      if (context.authToken && !interpolatedHeaders['Authorization']) {
-        interpolatedHeaders['Authorization'] = context.authToken.startsWith('Bearer ') ? context.authToken : `Bearer ${context.authToken}`;
+      if (context.authToken && !interpolatedHeaders.Authorization) {
+        interpolatedHeaders.Authorization = context.authToken.startsWith("Bearer ")
+          ? context.authToken
+          : `Bearer ${context.authToken}`;
       }
 
       const reqOptions: NetworkRequestSpec = {
@@ -56,7 +61,7 @@ export class WorkflowEngine {
         body: interpolatedBody,
         timeoutMs: 10000,
         followRedirects: true,
-        tlsVerify: true
+        tlsVerify: true,
       };
 
       try {
@@ -67,10 +72,11 @@ export class WorkflowEngine {
         if (response.status < 300 && response.body) {
           try {
             const parsedJson = JSON.parse(response.body);
-            
+
             // Auto token capture
-            const tokenCandidate = parsedJson.token || parsedJson.accessToken || parsedJson.access_token || parsedJson.jwt;
-            if (tokenCandidate && typeof tokenCandidate === 'string') {
+            const tokenCandidate =
+              parsedJson.token || parsedJson.accessToken || parsedJson.access_token || parsedJson.jwt;
+            if (tokenCandidate && typeof tokenCandidate === "string") {
               context.authToken = tokenCandidate;
               extractedValues.authToken = tokenCandidate;
             }
@@ -95,14 +101,13 @@ export class WorkflowEngine {
           status: response.status,
           statusText: response.statusText,
           durationMs: response.metrics.totalTimeMs,
-          extractedValues
+          extractedValues,
         });
 
         // Abort workflow on severe HTTP error
         if (response.status >= 400) {
           break;
         }
-
       } catch (err: any) {
         results.push({
           stepId: step.id,
@@ -112,7 +117,7 @@ export class WorkflowEngine {
           statusText: "Error",
           durationMs: 0,
           extractedValues: {},
-          error: err.message
+          error: err.message,
         });
         break;
       }

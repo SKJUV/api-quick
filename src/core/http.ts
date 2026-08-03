@@ -1,4 +1,4 @@
-import { NetworkRequestSpec, NetworkResponseSpec } from "../types/index.js";
+import type { NetworkRequestSpec, NetworkResponseSpec } from "../types/index.js";
 
 export class CoreHttpEngine {
   public async execute(spec: NetworkRequestSpec): Promise<NetworkResponseSpec> {
@@ -23,7 +23,7 @@ export class CoreHttpEngine {
         headers,
         body: ["GET", "HEAD"].includes(spec.method) ? undefined : requestBody,
         redirect: spec.followRedirects ? "follow" : "manual",
-        signal: controller.signal
+        signal: controller.signal,
       });
 
       const ttfb = performance.now() - startTime;
@@ -49,8 +49,8 @@ export class CoreHttpEngine {
           timeToFirstByteMs: Math.round(ttfb * 100) / 100,
           downloadTimeMs: Math.round((totalTime - ttfb) * 100) / 100,
           totalTimeMs: Math.round(totalTime * 100) / 100,
-          bytesReceived: Buffer.byteLength(responseText, "utf-8")
-        }
+          bytesReceived: Buffer.byteLength(responseText, "utf-8"),
+        },
       };
     } catch (err: any) {
       clearTimeout(timeoutId);
