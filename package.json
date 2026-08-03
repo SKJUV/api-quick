@@ -1,6 +1,6 @@
 {
   "name": "@skjuve/api-quick",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "High-Performance Multi-Interface HTTP Engine, Automation & API Workbench",
   "main": "dist/index.js",
   "module": "dist/index.js",
